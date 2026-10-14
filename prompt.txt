@@ -1,0 +1,1774 @@
+## Production-Ready Real-Time MSISDN Eligibility Validation API
+### Java 17 + Spring Boot + Oracle + Asynchronous Audit + RHEL Deployment
+
+You are a Principal Java Backend Engineer, Software Architect, Database Engineer, DevOps Engineer, and Production Reliability Engineer.
+
+Your task is to **fully implement, build, test, package, and document a production-ready Real-Time MSISDN Eligibility Validation API**.
+
+This is a real production application, not a proof of concept.
+
+Create actual source files, configuration files, SQL scripts, executable shell scripts, documentation, tests, and the final production JAR.
+
+Do not stop at project scaffolding or code examples.
+
+Work in phases, verify each phase, and continue until the complete project is implemented.
+
+If an operation cannot be completed in the development environment, clearly identify the limitation rather than claiming success.
+
+---
+
+# 1. Project Overview
+
+The API receives an MSISDN and determines whether the MSISDN is eligible to perform an operation.
+
+Eligibility is determined using a large daily CSV blacklist.
+
+The CSV contains up to **10 million MSISDNs**, with multiple dynamically configurable blacklist sources.
+
+Expected production traffic is **500 requests per second**.
+
+The application must be optimized for:
+
+- High throughput.
+- Low response latency.
+- Efficient memory utilization.
+- Thread safety.
+- Zero-downtime blacklist replacement.
+- Reliable asynchronous auditing.
+- Direct Oracle database integration.
+- Automatic CSV audit exports.
+- Recovery after application or server failures.
+- Simple RHEL deployment and maintenance.
+
+The application must be configurable through an external `application.yml` located alongside the JAR.
+
+The system must be maintainable by an operations engineer without modifying Java source code.
+
+---
+
+# 2. Technology Stack
+
+Use:
+
+| Component | Technology |
+|---|---|
+| Language | Java 17 |
+| Java distribution | OpenJDK 17.0.20.1 |
+| Framework | Spring Boot 3.x, maintained Java 17-compatible release |
+| Build | Maven |
+| HTTP | Spring Web MVC / embedded Tomcat |
+| Validation | Spring Validation |
+| In-memory blacklist | FastUtil primitive HashMap |
+| CSV parsing | Univocity Parsers |
+| Audit logging | Log4j2 asynchronous logging with bounded queue |
+| Database | Oracle |
+| Database integration | Spring JDBC |
+| Connection pool | HikariCP |
+| Metrics | Spring Boot Actuator / Micrometer |
+| Testing | JUnit 5, Mockito, Spring Boot Test |
+| Performance testing | k6 |
+| Deployment | RHEL |
+| Process management | systemd + optional cron watchdog |
+
+Do not introduce Redis, Kafka, RabbitMQ, or other infrastructure unless absolutely necessary.
+
+Do not use Oracle for real-time blacklist lookups.
+
+Avoid JPA/Hibernate for high-volume audit insertion. Use efficient JDBC batching.
+
+---
+
+# 3. Final Project Structure
+
+Create a professional Maven project with a structure similar to:
+
+```text
+msisdn-eligibility-api/
+│
+├── pom.xml
+├── README.md
+├── docs.md
+│
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/company/msisdn/
+│   │   │       ├── Application.java
+│   │   │       ├── config/
+│   │   │       ├── controller/
+│   │   │       ├── service/
+│   │   │       ├── blacklist/
+│   │   │       ├── audit/
+│   │   │       ├── oracle/
+│   │   │       ├── export/
+│   │   │       ├── dto/
+│   │   │       ├── exception/
+│   │   │       ├── monitoring/
+│   │   │       └── security/
+│   │   │
+│   │   └── resources/
+│   │       └── application.yml
+│   │
+│   └── test/
+│       ├── java/
+│       └── resources/
+│
+├── config/
+│   ├── application.yml
+│   └── log4j2-spring.xml
+│
+├── sql/
+│   ├── 01_create_tables.sql
+│   ├── 02_create_indexes.sql
+│   ├── 03_create_sequences.sql
+│   ├── 04_create_grants.sql
+│   ├── 05_verify_installation.sql
+│   ├── 06_audit_queries.sql
+│   ├── 07_maintenance.sql
+│   └── README.md
+│
+├── scripts/
+│   ├── start.sh
+│   ├── stop.sh
+│   ├── restart.sh
+│   ├── status.sh
+│   ├── healthcheck.sh
+│   ├── watchdog.sh
+│   ├── install.sh
+│   ├── setup-cron.sh
+│   └── uninstall-cron.sh
+│
+├── deploy/
+│   ├── msisdn-api.service
+│   └── crontab.example
+│
+├── samples/
+│   ├── blacklist_sample.csv
+│   ├── application.example.yml
+│   └── api_requests.http
+│
+├── tests/
+│   ├── manual-testing.md
+│   ├── load-test.js
+│   └── test-results/
+│
+└── release/
+    ├── msisdn-api.jar
+    ├── application.yml
+    ├── docs.md
+    ├── sql/
+    ├── scripts/
+    └── deploy/
+```
+
+This structure is illustrative. Improve it where necessary, but preserve all requested deliverables.
+
+The `release/` directory must contain everything required to deploy the application.
+
+Do not include database credentials or private keys in the release package.
+
+---
+
+# 4. API Requirements
+
+Implement:
+
+```http
+POST /api/v1/eligibility/check
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "msisdn": "201066257228"
+}
+```
+
+Blacklisted response:
+
+```json
+{
+  "requestId": "unique-request-id",
+  "msisdn": "201066257228",
+  "result": "KO",
+  "reasons": [
+    "Anti-Fraud (Vishing)",
+    "Anti-Fraud (Financial Fraud)"
+  ],
+  "blacklistVersion": "20261015"
+}
+```
+
+Eligible response:
+
+```json
+{
+  "requestId": "unique-request-id",
+  "msisdn": "201055555555",
+  "result": "OK",
+  "reasons": [],
+  "blacklistVersion": "20261015"
+}
+```
+
+Business rules:
+
+- MSISDN not found: `OK`.
+- MSISDN found with one or more active flags: `KO`.
+- MSISDN found with all-zero flags: `OK`.
+- Return every active source as a rejection reason.
+- HTTP 200 for valid eligibility decisions.
+- HTTP 400 for malformed requests.
+- HTTP 503 when the application is not ready or cannot safely accept audit events.
+- HTTP 500 for unexpected failures.
+
+Generate a unique request ID for each request.
+
+Use the same ID for response tracing, application diagnostics, Oracle records, and CSV auditing.
+
+Preserve MSISDN as a string in all external interfaces.
+
+Make MSISDN validation rules configurable.
+
+Default to 12-digit Egyptian MSISDNs starting with `20`.
+
+---
+
+# 5. Blacklist CSV Format
+
+Example:
+
+```csv
+MSISDN,Vishing,Suspicious_IMEI,Financial_Fraud
+201066257228,1,0,1
+201012345678,0,1,1
+201098765432,1,0,0
+```
+
+The number of source columns is dynamic.
+
+The application must read source names from the CSV header.
+
+Use configurable human-readable source names:
+
+```yaml
+sources:
+  display-names:
+    Vishing: "Anti-Fraud (Vishing)"
+    Suspicious_IMEI: "Anti-Fraud (Suspicious IMEI)"
+    Financial_Fraud: "Anti-Fraud (Financial Fraud)"
+```
+
+Support up to 64 sources using a Java `long` bitmask.
+
+Handle all 64 bits correctly, including the sign bit.
+
+If more than 64 sources are encountered, reject the file with a clear validation error.
+
+Support configurable duplicate handling, initially merging flags using bitwise OR.
+
+Reject invalid MSISDNs, invalid flags, malformed CSV structures, and conflicting headers according to the configured validation policy.
+
+---
+
+# 6. High-Performance Blacklist Engine
+
+Use:
+
+```java
+Long2LongOpenHashMap
+```
+
+The key represents the numeric MSISDN.
+
+The value represents the source bitmask.
+
+Do not create a separate Java object for every MSISDN.
+
+Do not store the entire CSV as a collection of strings.
+
+Optimize parsing and memory allocation.
+
+The blacklist must support approximately 10 million records.
+
+Use a configurable initial capacity and load factor.
+
+Implement an immutable snapshot wrapper containing:
+
+- Lookup map.
+- Source definitions.
+- Source display names.
+- Snapshot version.
+- Load timestamp.
+- Record count.
+- Source count.
+- Source-file metadata.
+
+Use:
+
+```java
+AtomicReference<BlacklistSnapshot>
+```
+
+Every request must read the active snapshot once.
+
+Never mutate a published snapshot.
+
+Concurrent lookups must not require global synchronization.
+
+---
+
+# 7. Daily Blacklist Reload
+
+Implement a background loader that:
+
+1. Scans a configurable input directory.
+2. Detects new blacklist CSV files.
+3. Waits until a file has been completely published.
+4. Supports `.ready` marker files.
+5. Validates the CSV.
+6. Builds a completely new primitive map.
+7. Validates the resulting snapshot.
+8. Atomically activates the new snapshot.
+9. Retains the previous valid snapshot.
+10. Records reload metrics and operational logs.
+
+Never clear the active blacklist before the new one is ready.
+
+Never expose a partially loaded blacklist.
+
+If the new CSV fails validation, continue using the previous valid snapshot, subject to the configured freshness policy.
+
+Support startup recovery from the last successfully validated blacklist.
+
+Do not report API readiness until a valid blacklist is available.
+
+Make the maximum permitted blacklist age configurable.
+
+Ensure older blacklist files cannot overwrite newer versions.
+
+Provide manual reload verification instructions in `docs.md`.
+
+---
+
+# 8. External Configuration
+
+Create a comprehensive external `application.yml`.
+
+It must control all important operational behavior.
+
+Include:
+
+## Server
+
+- HTTP port.
+- Bind address.
+- Tomcat worker threads.
+- Maximum connections.
+- Connection timeout.
+- Graceful shutdown timeout.
+
+## API
+
+- Endpoint path.
+- MSISDN validation rules.
+- Eligibility response values.
+- Response fields.
+- Error behavior.
+
+## Blacklist
+
+- Input directory.
+- Processed directory.
+- Rejected directory.
+- Snapshot directory.
+- Filename pattern.
+- CSV delimiter.
+- Character encoding.
+- Source definitions.
+- Duplicate handling.
+- Reload interval.
+- Ready marker.
+- Minimum record count.
+- Snapshot retention.
+- Freshness policy.
+- Memory capacity and load factor.
+
+## Audit
+
+- Enable/disable.
+- Queue size.
+- Worker count.
+- Queue overflow policy.
+- Overflow timeout.
+- Log format.
+- File rotation size.
+- File rotation interval.
+- Flush interval.
+- Recovery settings.
+- Retention.
+
+## Oracle
+
+- JDBC URL.
+- Username.
+- Password from environment variables.
+- Connection pool.
+- Batch size.
+- Flush interval.
+- Retry policy.
+- Checkpoint directory.
+- Audit table name.
+
+## CSV export
+
+- Enable/disable.
+- Destination directory.
+- Filename prefix.
+- Delimiter.
+- Header inclusion.
+- Maximum file size.
+- Maximum file age.
+- Checkpoint directory.
+- Retry settings.
+
+## Monitoring
+
+- Health endpoints.
+- Blacklist freshness threshold.
+- Audit queue warning threshold.
+- Disk-space threshold.
+- Oracle backlog threshold.
+- CSV export backlog threshold.
+
+Use typed Spring `@ConfigurationProperties`.
+
+Validate configuration at startup.
+
+Every documented configuration property must be implemented.
+
+Do not create fake configuration settings that have no effect.
+
+Use external environment variables for credentials.
+
+Document which settings require an application restart.
+
+---
+
+# 9. Asynchronous Audit Logging
+
+The API must not synchronously insert audit records into Oracle.
+
+Implement a bounded asynchronous audit pipeline.
+
+Initial settings:
+
+```yaml
+audit:
+  async:
+    enabled: true
+    queue-size: 65536
+    worker-count: 1
+    overflow-policy: block-with-timeout
+    overflow-timeout-ms: 10
+```
+
+Audit records must contain:
+
+- Request ID.
+- Request timestamp.
+- Response timestamp.
+- MSISDN.
+- Eligibility result.
+- Reason mask.
+- Human-readable reasons.
+- Blacklist version.
+- HTTP status.
+- Processing time.
+- API instance.
+
+Use structured JSON Lines.
+
+Example:
+
+```json
+{"requestId":"req-001","msisdn":"201066257228","result":"KO","reasonMask":"5","reasons":["Anti-Fraud (Vishing)","Anti-Fraud (Financial Fraud)"],"blacklistVersion":"20261015"}
+```
+
+Separate audit files from general application logs.
+
+Use a bounded queue.
+
+If the queue is full, wait for the configured timeout.
+
+If the event cannot be accepted, return HTTP 503 rather than silently dropping it.
+
+We explicitly accept the small crash-related loss window associated with asynchronous logging.
+
+Do not claim guaranteed durability for records that remain in memory or unflushed operating-system buffers.
+
+---
+
+# 10. Audit File Rotation and Recovery
+
+Implement audit segment lifecycle management.
+
+Use directories for:
+
+```text
+logs/audit/active/
+logs/audit/completed/
+logs/audit/archive/
+```
+
+Support:
+
+- Rotation by size.
+- Rotation by time.
+- Unique segment filenames.
+- Safe segment finalization.
+- Recovery of complete records from interrupted active segments.
+- Detection of truncated records.
+- Quarantine of corrupt data.
+- Independent Oracle and CSV processing checkpoints.
+
+Only completed immutable segments may be consumed by Oracle and CSV workers.
+
+A segment must not be deleted until all required downstream processing has succeeded.
+
+Handle:
+
+- Graceful restart.
+- Sudden JVM termination.
+- Interrupted segment writes.
+- Oracle outages.
+- CSV export failures.
+- Disk-space exhaustion.
+- Crash after Oracle commit but before checkpoint.
+- Crash after CSV publication but before checkpoint.
+
+Ensure downstream processing is idempotent.
+
+Do not rely solely on a standard Log4j2 rolling appender for application-level recovery guarantees.
+
+Implement explicit segment and checkpoint coordination.
+
+---
+
+# 11. Oracle Database Integration
+
+The Spring Boot application connects directly to Oracle.
+
+Use Spring JDBC and HikariCP.
+
+The Oracle writer must run in independent background threads.
+
+Never execute Oracle inserts on HTTP request threads.
+
+Implement configurable JDBC batching.
+
+Initial batch size:
+
+```yaml
+oracle-audit:
+  batch:
+    size: 1000
+    flush-interval-ms: 1000
+```
+
+Implement:
+
+- Prepared statements.
+- Transactional batch commits.
+- Retry with exponential backoff.
+- Idempotent replay.
+- Unique request IDs.
+- Durable processing checkpoints.
+- Oracle connection recovery.
+- Metrics for inserted records and failures.
+- Backlog monitoring.
+
+If Oracle is unavailable, continue writing local audit segments and retry database ingestion later.
+
+Do not accumulate an unbounded Oracle backlog in JVM memory.
+
+The backlog must be stored on disk.
+
+Use a restricted Oracle account.
+
+---
+
+# 12. Complete Oracle SQL Scripts — Mandatory
+
+Generate **all SQL scripts required to prepare Oracle for the application**.
+
+Place them in the `sql/` directory.
+
+At minimum, create:
+
+### `01_create_tables.sql`
+
+Create the main audit table containing:
+
+- REQUEST_ID
+- REQUEST_TIMESTAMP
+- RESPONSE_TIMESTAMP
+- MSISDN
+- RESULT
+- REASON_MASK
+- REASONS
+- BLACKLIST_VERSION
+- PROCESSING_TIME_MS
+- HTTP_STATUS
+- API_INSTANCE
+
+Use Oracle-compatible data types.
+
+Store MSISDN as `VARCHAR2`.
+
+Store the complete unsigned 64-bit reason mask safely, such as hexadecimal text or an appropriately sized Oracle `NUMBER`.
+
+Use suitable primary keys and constraints.
+
+Include any additional metadata tables genuinely required for checkpointing or idempotency.
+
+### `02_create_indexes.sql`
+
+Create only necessary indexes.
+
+Consider high-volume insertion performance.
+
+Explain why each index is required.
+
+### `03_create_sequences.sql`
+
+Create sequences only if the design requires them.
+
+If none are needed, provide a script explicitly documenting that decision.
+
+### `04_create_grants.sql`
+
+Provide least-privilege grants for the application account.
+
+Clearly distinguish DBA/schema-owner actions from application-user actions.
+
+Use configurable schema and username placeholders.
+
+### `05_verify_installation.sql`
+
+Provide queries to verify:
+
+- Tables exist.
+- Required columns exist.
+- Indexes exist.
+- Constraints exist.
+- Application privileges are correct.
+- The application account can perform the required operations.
+
+### `06_audit_queries.sql`
+
+Provide useful operational queries:
+
+- Latest API requests.
+- Requests for a particular MSISDN.
+- OK/KO counts.
+- Requests per minute.
+- Requests per hour.
+- Rejection reasons.
+- Recent database insertion activity.
+- Daily audit volumes.
+
+### `07_maintenance.sql`
+
+Provide safe maintenance and retention examples.
+
+Do not automatically delete production data.
+
+Include clear warnings for destructive operations.
+
+### `sql/README.md`
+
+Document:
+
+1. Which SQL scripts must be executed.
+2. Their exact execution order.
+3. Which database account should execute each script.
+4. Which scripts require DBA privileges.
+5. How to verify successful installation.
+6. How to configure the JDBC URL.
+7. How to test connectivity.
+8. How to confirm audit records are being inserted.
+9. How to investigate Oracle ingestion failures.
+10. How to manage retention and table growth.
+
+The application must not require DBA privileges at runtime.
+
+Do not assume a particular Oracle schema or tablespace name without making it configurable.
+
+---
+
+# 13. CSV Audit Export
+
+Create an independent CSV exporter.
+
+It must consume completed audit segments.
+
+CSV output must contain request and response details.
+
+Support:
+
+- Configurable destination directory.
+- Configurable filename.
+- Configurable delimiter.
+- UTF-8.
+- Headers.
+- Rotation by size.
+- Rotation by time.
+- Temporary `.part` files.
+- Atomic final publication.
+- Recovery after restart.
+- Independent checkpoints.
+- Idempotent processing.
+
+Do not expose incomplete CSV files as completed output.
+
+If the destination is unavailable, retain the source audit segments and retry later.
+
+Ensure CSV output can be written to local storage or an accessible mounted filesystem.
+
+---
+
+# 14. Production JAR — Mandatory
+
+Generate a complete executable Spring Boot JAR.
+
+The JAR must include the required runtime dependencies.
+
+Build using Maven.
+
+The normal build process should include:
+
+```bash
+mvn clean verify
+```
+
+Then package the executable artifact.
+
+Copy the verified JAR to:
+
+```text
+release/msisdn-api.jar
+```
+
+The JAR must:
+
+- Run with Java 17.
+- Load external configuration.
+- Not require source code at runtime.
+- Not require Maven at runtime.
+- Start independently of an IDE.
+- Support graceful shutdown.
+- Produce clear startup errors.
+- Expose health endpoints.
+- Support production logging.
+
+Do not declare the JAR production-ready unless it compiles and the available automated tests pass.
+
+If Maven or Java 17 is unavailable in the development environment, report that the JAR could not be built and provide the exact commands needed to build it.
+
+Do not create a fake or placeholder JAR.
+
+---
+
+# 15. RHEL Start, Stop, Restart, and Status Scripts
+
+Create fully functional Bash scripts.
+
+All scripts must be executable and compatible with RHEL.
+
+Use absolute paths and quote shell variables safely.
+
+### `start.sh`
+
+Must:
+
+- Locate the configured Java 17 executable.
+- Verify that the JAR exists.
+- Verify that the configuration exists.
+- Check whether the application is already running.
+- Prevent duplicate instances.
+- Create required directories.
+- Start the application.
+- Record the PID where appropriate.
+- Wait for startup/readiness within a configurable timeout.
+- Return an appropriate exit code.
+- Write startup diagnostics.
+
+Use a safe lock mechanism such as `flock`.
+
+Do not rely exclusively on `pgrep java` to identify the application.
+
+### `stop.sh`
+
+Must:
+
+- Identify the correct application process.
+- Send SIGTERM.
+- Allow graceful shutdown.
+- Wait for a configurable timeout.
+- Report success or failure.
+- Avoid terminating unrelated Java processes.
+
+Do not use `kill -9` by default.
+
+### `restart.sh`
+
+Must safely stop and restart the application.
+
+Prevent overlapping starts.
+
+### `status.sh`
+
+Must report:
+
+- Process status.
+- PID.
+- HTTP health status.
+- Readiness status.
+- Active blacklist version where available.
+
+### `healthcheck.sh`
+
+Must:
+
+- Call the configured health endpoint.
+- Use connection and response timeouts.
+- Return exit code 0 when healthy.
+- Return nonzero when unhealthy.
+- Avoid hanging indefinitely.
+
+Distinguish process liveness from application readiness.
+
+A temporary Oracle outage or an intentional blacklist reload must not automatically trigger destructive restart loops.
+
+---
+
+# 16. Cron Watchdog — Mandatory
+
+Implement a watchdog that can run from crontab every minute.
+
+Create:
+
+```text
+scripts/watchdog.sh
+```
+
+Its purpose is to detect when the API process is no longer running and restart it automatically.
+
+Requirements:
+
+1. Check whether the application process is running.
+2. Check the liveness endpoint when the process exists.
+3. Distinguish a stopped process from temporary unready status.
+4. Use `flock` to prevent concurrent watchdog executions.
+5. Use the approved startup script or `systemctl` to restart.
+6. Never start a second instance.
+7. Log every restart attempt.
+8. Use a configurable startup grace period.
+9. Apply a restart cooldown.
+10. Avoid endless restart loops.
+11. Return meaningful exit codes.
+12. Use absolute paths.
+13. Work without an interactive shell environment.
+
+Create:
+
+```text
+scripts/setup-cron.sh
+scripts/uninstall-cron.sh
+deploy/crontab.example
+```
+
+Example crontab:
+
+```cron
+* * * * * /opt/msisdn-api/scripts/watchdog.sh >> /opt/msisdn-api/logs/application/watchdog.log 2>&1
+```
+
+The watchdog must not blindly restart the application every time a readiness check fails.
+
+For example, if Oracle is temporarily unavailable but the validation API is still functioning, the watchdog must not unnecessarily restart the service.
+
+Use a configurable number of consecutive failed liveness checks before initiating recovery.
+
+Document that cron executes at one-minute intervals and does not provide immediate recovery.
+
+---
+
+# 17. systemd Service — Mandatory
+
+Create:
+
+```text
+deploy/msisdn-api.service
+```
+
+Use systemd as the preferred production supervisor.
+
+The service must:
+
+- Run under a dedicated non-root user.
+- Use the dedicated Java 17 executable.
+- Load external configuration.
+- Use the correct working directory.
+- Restart after unexpected process failures.
+- Respect graceful shutdown.
+- Apply appropriate restart delays.
+- Avoid aggressive restart loops.
+- Support environment variables for Oracle credentials.
+- Write logs to the configured locations.
+
+Example properties to evaluate:
+
+```ini
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+```
+
+Use the correct systemd syntax for the final implementation.
+
+Document:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable msisdn-api
+sudo systemctl start msisdn-api
+sudo systemctl status msisdn-api
+sudo systemctl stop msisdn-api
+sudo systemctl restart msisdn-api
+```
+
+The cron watchdog and systemd must cooperate safely.
+
+When systemd is enabled, the watchdog should request recovery through systemd rather than launching another independent Java process.
+
+Do not create two competing process supervisors.
+
+---
+
+# 18. Comprehensive `docs.md` — Mandatory
+
+Create a file named exactly:
+
+```text
+docs.md
+```
+
+Place it in the project root and include a copy in the release directory.
+
+This file must be a **complete operations and technical guide**.
+
+Assume the reader is an engineer who has never seen the project before.
+
+Explain everything clearly, step by step.
+
+The document must include the following chapters.
+
+## Chapter 1 — Introduction
+
+Explain:
+
+- What the API does.
+- Why it exists.
+- What MSISDN eligibility means.
+- How OK/KO decisions work.
+- What the blacklist contains.
+- How source flags determine rejection reasons.
+
+## Chapter 2 — Architecture
+
+Explain all components:
+
+- REST API.
+- Blacklist engine.
+- CSV loader.
+- Bitmask decoder.
+- Snapshot manager.
+- Audit queue.
+- Audit file writer.
+- Oracle batch writer.
+- CSV exporter.
+- Health monitoring.
+- Watchdog.
+
+Include a Mermaid architecture diagram.
+
+Explain the request lifecycle and background processing lifecycle.
+
+## Chapter 3 — Project Structure
+
+Explain every important directory and file.
+
+Describe what each Java package is responsible for.
+
+## Chapter 4 — Requirements
+
+Document:
+
+- Required Java version.
+- RHEL requirements.
+- Memory requirements.
+- CPU considerations.
+- Disk-space requirements.
+- Network requirements.
+- Oracle connectivity.
+- Required permissions.
+
+Provide initial sizing guidance and distinguish estimates from measured requirements.
+
+## Chapter 5 — Building the Project
+
+Explain:
+
+1. How to verify Java 17.
+2. How to verify Maven.
+3. How to compile.
+4. How to run tests.
+5. How to generate the JAR.
+6. Where the generated JAR is located.
+7. How to create the release package.
+
+Provide exact commands.
+
+## Chapter 6 — Installing on RHEL
+
+Explain:
+
+1. Creating the application directory.
+2. Creating the service user.
+3. Copying the JAR.
+4. Copying configuration.
+5. Creating directories.
+6. Assigning permissions.
+7. Configuring Java 17.
+8. Configuring Oracle.
+9. Starting the application.
+10. Verifying health.
+
+## Chapter 7 — Configuration Reference
+
+Document every `application.yml` setting.
+
+For each setting explain:
+
+- Purpose.
+- Default value.
+- Allowed values.
+- Example.
+- Whether restart is required.
+
+## Chapter 8 — Blacklist Management
+
+Explain:
+
+- Required CSV format.
+- Dynamic source columns.
+- Source name mapping.
+- Bitmask encoding.
+- Daily CSV publication.
+- Ready marker.
+- Automatic reload.
+- Invalid CSV handling.
+- Snapshot activation.
+- Recovery.
+- How to verify the loaded blacklist.
+
+## Chapter 9 — API Usage
+
+Document:
+
+- Endpoint URL.
+- HTTP method.
+- Authentication.
+- Request JSON.
+- OK response.
+- KO response.
+- Error responses.
+- cURL examples.
+- Bruno/Postman examples.
+
+## Chapter 10 — Audit Logging
+
+Explain:
+
+- Asynchronous queue.
+- JSONL format.
+- Audit segment rotation.
+- Completed segments.
+- Recovery.
+- Overflow behavior.
+- Retention.
+- Crash-related loss limitations.
+
+## Chapter 11 — Oracle Integration
+
+Explain:
+
+- JDBC configuration.
+- Required Oracle tables.
+- SQL installation order.
+- Batch insertion.
+- Retry behavior.
+- Checkpoints.
+- Duplicate prevention.
+- How to query audit records.
+- What happens during an Oracle outage.
+
+## Chapter 12 — CSV Export
+
+Explain:
+
+- Export directories.
+- File naming.
+- Rotation.
+- Temporary files.
+- Final publication.
+- Recovery.
+- Retention.
+
+## Chapter 13 — Starting and Stopping
+
+Explain exact commands for:
+
+- Starting.
+- Stopping.
+- Restarting.
+- Checking status.
+- Viewing logs.
+- Checking health.
+
+Include both direct shell scripts and systemd commands.
+
+## Chapter 14 — Cron Watchdog
+
+Explain:
+
+- Why the watchdog exists.
+- How it works.
+- How to install the crontab entry.
+- How to verify it is running.
+- How to inspect watchdog logs.
+- How to disable it.
+- How duplicate instances are prevented.
+- How it cooperates with systemd.
+
+## Chapter 15 — Monitoring
+
+Explain:
+
+- Health endpoints.
+- Readiness.
+- Liveness.
+- Metrics.
+- Queue utilization.
+- Blacklist freshness.
+- Oracle backlog.
+- Disk monitoring.
+- JVM memory monitoring.
+
+## Chapter 16 — Troubleshooting
+
+Include troubleshooting procedures for:
+
+- API not starting.
+- Wrong Java version.
+- Port already in use.
+- Missing configuration.
+- Invalid blacklist.
+- Missing blacklist.
+- Stale blacklist.
+- Oracle connection failure.
+- Audit queue full.
+- Disk full.
+- CSV export failure.
+- High JVM memory.
+- Slow API response.
+- Watchdog restart loop.
+- Application unexpectedly terminating.
+
+## Chapter 17 — Recovery
+
+Explain recovery after:
+
+- Graceful restart.
+- JVM crash.
+- Server reboot.
+- Oracle outage.
+- Failed blacklist reload.
+- CSV destination failure.
+- Corrupted audit segment.
+- Interrupted Oracle batch.
+
+## Chapter 18 — Production Maintenance
+
+Explain:
+
+- Daily checks.
+- Weekly checks.
+- Log retention.
+- Disk cleanup.
+- Blacklist validation.
+- Oracle table maintenance.
+- Updating the JAR.
+- Rolling back to an earlier release.
+
+## Chapter 19 — Performance
+
+Explain:
+
+- Expected lookup complexity.
+- Memory optimization.
+- Heap sizing.
+- Daily reload memory requirements.
+- Audit queue overhead.
+- Oracle batching.
+- How to run performance tests.
+- How to interpret test results.
+
+## Chapter 20 — Manual Testing
+
+Provide a complete walkthrough referencing `tests/manual-testing.md`.
+
+Do not leave any chapter empty or use placeholder text.
+
+---
+
+# 19. Manual Testing Guide — Mandatory
+
+Create:
+
+```text
+tests/manual-testing.md
+```
+
+This must be an executable, step-by-step manual testing guide.
+
+Every test case must include:
+
+- Test objective.
+- Prerequisites.
+- Exact command or action.
+- Expected response.
+- Verification procedure.
+- Pass/fail criteria.
+
+Include the following scenarios.
+
+### Test 1 — Verify Java Installation
+
+```bash
+/opt/java/jdk-17/bin/java -version
+```
+
+Explain expected output.
+
+### Test 2 — Verify JAR Startup
+
+Run the application and confirm it starts.
+
+### Test 3 — Verify Health Endpoint
+
+Use `curl` to verify liveness and readiness.
+
+### Test 4 — Test Eligible MSISDN
+
+Send an MSISDN absent from the blacklist.
+
+Expected result: OK.
+
+### Test 5 — Test Blacklisted MSISDN
+
+Send an MSISDN with one active source.
+
+Expected result: KO with one reason.
+
+### Test 6 — Multiple Rejection Reasons
+
+Send an MSISDN with multiple active source flags.
+
+Verify all reasons are returned.
+
+### Test 7 — Invalid MSISDN
+
+Test malformed input, wrong length, and invalid characters.
+
+Expected result: HTTP 400.
+
+### Test 8 — Verify Audit File
+
+Send API requests and inspect the generated audit records.
+
+Verify request ID, MSISDN, result, reasons, and timestamps.
+
+### Test 9 — Verify Oracle Records
+
+Execute SQL queries to confirm the API requests were inserted.
+
+### Test 10 — Verify CSV Export
+
+Inspect completed CSV files.
+
+Verify record counts and content.
+
+### Test 11 — Daily Blacklist Reload
+
+Create a new CSV containing changed eligibility values.
+
+Publish it correctly.
+
+Wait for reload.
+
+Verify the new results without restarting the application.
+
+### Test 12 — Invalid Blacklist
+
+Publish an invalid CSV.
+
+Verify the previous valid snapshot remains active.
+
+### Test 13 — Application Restart
+
+Restart the application.
+
+Verify recovery and continued processing.
+
+### Test 14 — Oracle Outage
+
+Temporarily make Oracle unavailable in a controlled test environment.
+
+Verify the API continues to process requests and audit segments accumulate.
+
+Restore Oracle connectivity.
+
+Verify pending records are inserted.
+
+### Test 15 — Audit Queue Saturation
+
+Simulate a slow or blocked audit writer.
+
+Verify bounded queue behavior and HTTP 503 when required.
+
+### Test 16 — CSV Export Failure
+
+Simulate an unavailable export destination.
+
+Verify recovery after restoring the destination.
+
+### Test 17 — Watchdog Recovery
+
+Stop or terminate the API process in a controlled environment.
+
+Wait for the watchdog.
+
+Verify automatic recovery and confirm only one instance is running.
+
+### Test 18 — Server Reboot Recovery
+
+Verify systemd startup and watchdog behavior after reboot.
+
+### Test 19 — Concurrent Requests
+
+Run multiple simultaneous requests.
+
+Verify correct responses and no concurrency errors.
+
+### Test 20 — Load Testing
+
+Run k6 tests at:
+
+- 100 requests/second.
+- 250 requests/second.
+- 500 requests/second.
+- 750 requests/second.
+- 1,000 requests/second.
+
+Record:
+
+- Successful requests.
+- Failed requests.
+- p50 latency.
+- p95 latency.
+- p99 latency.
+- CPU utilization.
+- JVM heap usage.
+- Audit queue utilization.
+- Oracle backlog.
+
+Include instructions for running tests while the daily blacklist is reloading.
+
+Clearly identify any tests that require a dedicated non-production environment.
+
+Do not recommend destructive fault-injection tests directly against production.
+
+---
+
+# 20. Monitoring and Operational Status
+
+Implement:
+
+```http
+GET /api/v1/system/status
+```
+
+Provide safe operational details:
+
+- Application version.
+- Uptime.
+- Active blacklist version.
+- Blacklist record count.
+- Last successful reload.
+- Source count.
+- Audit queue size and utilization.
+- Oracle writer status.
+- Oracle backlog.
+- CSV exporter status.
+- CSV backlog.
+
+Also expose appropriate Spring Boot Actuator endpoints.
+
+Protect operational endpoints from unauthorized access.
+
+Do not expose credentials or sensitive configuration.
+
+---
+
+# 21. Security
+
+Implement:
+
+- Configurable API authentication.
+- Request validation.
+- Least-privilege Oracle credentials.
+- Protected operational endpoints.
+- External secret configuration.
+- Secure filesystem permissions.
+- Appropriate TLS deployment guidance.
+- Controlled access to MSISDN audit records.
+- Protection against malformed CSV files.
+- Safe CSV escaping and spreadsheet formula-injection handling.
+
+Do not hardcode passwords.
+
+Do not expose full MSISDNs in general application error logs unless explicitly required.
+
+---
+
+# 22. Automated Testing
+
+Create comprehensive tests for:
+
+- MSISDN validation.
+- Bitmask encoding.
+- Bitmask decoding.
+- Dynamic source mapping.
+- All 64 source bits.
+- Duplicate MSISDN merging.
+- CSV parsing.
+- CSV validation.
+- Atomic blacklist replacement.
+- Concurrent lookups.
+- Audit queue overflow.
+- Audit segment rotation.
+- Audit recovery.
+- Oracle batch insertion.
+- Oracle replay idempotency.
+- CSV export.
+- CSV recovery.
+- Application readiness.
+- Graceful shutdown.
+
+Use a real Oracle test environment for Oracle-specific integration tests when available.
+
+Do not claim H2 tests prove Oracle compatibility.
+
+Create k6 load-testing scripts.
+
+Do not fabricate benchmark results.
+
+---
+
+# 23. Production Reliability Requirements
+
+Handle:
+
+- Missing daily CSV.
+- Invalid daily CSV.
+- Partially transferred CSV.
+- Application restart.
+- JVM crash.
+- Server reboot.
+- Oracle connection failure.
+- Oracle transaction failure.
+- Duplicate audit replay.
+- Audit queue saturation.
+- Disk-space exhaustion.
+- CSV export failure.
+- High JVM memory utilization.
+- Concurrent blacklist reload.
+- Multiple watchdog executions.
+- Port already occupied.
+- Existing application process.
+
+The application must fail safely.
+
+Never return an incorrect OK decision because the blacklist was unavailable.
+
+Never silently drop required audit events.
+
+Do not use unbounded queues.
+
+Do not delete unprocessed audit files.
+
+---
+
+# 24. Release Packaging
+
+Create a release directory containing:
+
+```text
+release/
+├── msisdn-api.jar
+├── application.yml
+├── docs.md
+├── README.md
+├── config/
+│   └── log4j2-spring.xml
+├── sql/
+│   ├── 01_create_tables.sql
+│   ├── 02_create_indexes.sql
+│   ├── 03_create_sequences.sql
+│   ├── 04_create_grants.sql
+│   ├── 05_verify_installation.sql
+│   ├── 06_audit_queries.sql
+│   ├── 07_maintenance.sql
+│   └── README.md
+├── scripts/
+│   ├── start.sh
+│   ├── stop.sh
+│   ├── restart.sh
+│   ├── status.sh
+│   ├── healthcheck.sh
+│   ├── watchdog.sh
+│   ├── setup-cron.sh
+│   └── uninstall-cron.sh
+├── deploy/
+│   ├── msisdn-api.service
+│   └── crontab.example
+└── tests/
+    └── manual-testing.md
+```
+
+Include an installation script where appropriate.
+
+The release package must not contain secrets, temporary build files, or test credentials.
+
+Verify that shell scripts have valid Bash syntax and appropriate executable permissions.
+
+---
+
+# 25. Implementation Phases
+
+Implement in the following order.
+
+### Phase 1 — Foundation
+
+- Maven project.
+- Spring Boot.
+- External configuration.
+- Directory structure.
+- Health endpoints.
+- Initial documentation.
+
+### Phase 2 — Blacklist Engine
+
+- CSV parsing.
+- Primitive HashMap.
+- Bitmask encoding/decoding.
+- Snapshot management.
+- Daily reload.
+- Recovery.
+
+### Phase 3 — REST API
+
+- Request validation.
+- Eligibility logic.
+- OK/KO responses.
+- Error handling.
+- Unit tests.
+
+### Phase 4 — Audit System
+
+- Bounded asynchronous queue.
+- Structured audit logging.
+- Rolling segments.
+- Recovery.
+- Checkpoints.
+
+### Phase 5 — Oracle
+
+- SQL scripts.
+- JDBC connection.
+- Batch writer.
+- Retry.
+- Idempotency.
+- Recovery.
+
+### Phase 6 — CSV Export
+
+- Background exporter.
+- File rotation.
+- Atomic publication.
+- Recovery.
+
+### Phase 7 — Deployment
+
+- Production JAR.
+- Start/stop/restart/status scripts.
+- systemd service.
+- Cron watchdog.
+- Installation scripts.
+
+### Phase 8 — Documentation
+
+- Complete `docs.md`.
+- SQL README.
+- Manual testing guide.
+- Configuration reference.
+- Troubleshooting.
+
+### Phase 9 — Verification
+
+- Maven build.
+- Unit tests.
+- Integration tests where available.
+- Concurrency tests.
+- Shell syntax checks.
+- Configuration checks.
+- Load-testing scripts.
+- Release packaging.
+
+Do not proceed to the next phase with unresolved compilation failures.
+
+---
+
+# 26. Final Verification Checklist
+
+Before finishing, verify:
+
+- [ ] Project compiles using Java 17.
+- [ ] Maven tests pass.
+- [ ] Executable JAR is generated.
+- [ ] External YAML is loaded correctly.
+- [ ] All configuration properties are functional.
+- [ ] Blacklist lookup works.
+- [ ] Dynamic sources work.
+- [ ] Bitmask decoding works.
+- [ ] Daily reload is atomic.
+- [ ] Invalid CSV does not replace valid data.
+- [ ] API handles concurrent requests.
+- [ ] Audit queue is bounded.
+- [ ] Audit files rotate correctly.
+- [ ] Recovery handles interrupted segments.
+- [ ] Oracle SQL scripts are complete.
+- [ ] Oracle writer uses batching.
+- [ ] Oracle replay is idempotent.
+- [ ] CSV export works.
+- [ ] CSV recovery works.
+- [ ] Start script works.
+- [ ] Stop script works.
+- [ ] Restart script works.
+- [ ] Status script works.
+- [ ] Watchdog prevents duplicate instances.
+- [ ] systemd service is provided.
+- [ ] Cron installation example is provided.
+- [ ] `docs.md` is complete.
+- [ ] Manual testing guide is complete.
+- [ ] Release directory contains the real JAR and required deployment files.
+- [ ] No credentials are hardcoded.
+- [ ] No placeholder implementations remain.
+
+For any item that cannot be verified, explicitly mark it as NOT VERIFIED and explain why.
+
+---
+
+# 27. Final Response Required From Cursor
+
+After implementation, provide a final summary containing:
+
+**1. Project Status**
+
+Explain what was implemented and what remains incomplete.
+
+**2. Build Status**
+
+State whether Maven compilation and tests passed.
+
+**3. Production JAR**
+
+Provide the actual location of the generated JAR.
+
+**4. Deployment Instructions**
+
+Show the exact commands required to install and run the application on RHEL.
+
+**5. Oracle Setup**
+
+List the SQL scripts and the exact order in which they must be executed.
+
+**6. Configuration**
+
+Identify the external YAML file and the settings that must be updated before deployment.
+
+**7. Startup and Watchdog**
+
+Explain how to start the API, configure systemd, and enable the optional one-minute cron watchdog.
+
+**8. Manual Testing**
+
+Explain how to perform the first API request and verify the response, audit log, Oracle record, and CSV export.
+
+**9. Performance**
+
+Provide actual benchmark results only if load tests were executed.
+
+**10. Outstanding Risks**
+
+Clearly identify unresolved production risks and environment-dependent verification steps.
+
+---
+
+# BEGIN IMPLEMENTATION
+
+Inspect the current workspace.
+
+If the workspace is empty, create the project from scratch.
+
+First present the proposed package structure and the key technical decisions.
+
+Then begin implementing the complete application in the phases above.
+
+Create actual files rather than only describing code.
+
+Build and test as work progresses.
+
+Continue until the full project, executable JAR, Oracle SQL scripts, RHEL scripts, watchdog, documentation, and manual testing guide are delivered.
+
+Do not claim completion if required files are missing, the JAR has not been built, or critical components remain placeholders.
+
+feel free to ask questions if you have any questions.
+
+between every phase make a new branch in the repo and push your new changes and commit it.
+at the end i want to access the last branch to view the last project state or phase. also i want to put the new tables in FMSPRD6 if you remember it.
