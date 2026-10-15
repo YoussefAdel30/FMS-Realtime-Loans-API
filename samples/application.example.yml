@@ -1,0 +1,212 @@
+# Production configuration for /opt/msisdn-api/application.yml.
+# Secrets come from the environment. Do not put passwords in this file.
+# Every setting below is read by the application. A change requires a restart,
+# except publishing a new blacklist CSV into the configured input directory.
+
+server:
+  port: 8080
+  address: 0.0.0.0
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+    max-connections: 8192
+    accept-count: 1000
+    connection-timeout: 5s
+    keep-alive-timeout: 30s
+
+spring:
+  application:
+    name: msisdn-eligibility-api
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    serialization:
+      write-dates-as-timestamps: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        liveness:
+          include:
+            - livenessState
+            - auditWriter
+        readiness:
+          include:
+            - readinessState
+            - blacklist
+            - auditPipeline
+            - diskSpace
+  health:
+    diskspace:
+      enabled: true
+      path: ${monitoring.disk-path}
+      threshold: ${monitoring.disk-space-threshold-bytes}
+
+api:
+  eligibility-path: /api/v1/eligibility/check
+  status-path: /api/v1/system/status
+  instance-id: ${MSISDN_INSTANCE_ID:${HOSTNAME:msisdn-api}}
+  msisdn:
+    pattern: "^20[0-9]{10}$"
+    min-length: 12
+    max-length: 12
+    description: "12-digit Egyptian MSISDN starting with 20"
+  response:
+    eligible-value: OK
+    ineligible-value: KO
+    include-request-id: true
+    include-msisdn: true
+    include-reasons: true
+    include-blacklist-version: true
+  error:
+    include-message: validation-only
+    include-path: true
+
+blacklist:
+  input-directory: /opt/msisdn-api/data/blacklist/incoming
+  processed-directory: /opt/msisdn-api/data/blacklist/processed
+  rejected-directory: /opt/msisdn-api/data/blacklist/rejected
+  snapshot-directory: /opt/msisdn-api/data/blacklist/snapshot
+  filename-pattern: "blacklist-(\\d{8})\\.csv"
+  msisdn-column: MSISDN
+  delimiter: ","
+  encoding: UTF-8
+  duplicate-policy: merge-or
+  version-selection: highest-wins
+  reload-interval: 30s
+  sources:
+    header-case-sensitive: true
+    unknown-display-pattern: "Anti-Fraud ({name})"
+    display-names:
+      Vishing: "Anti-Fraud (Vishing)"
+      Suspicious_IMEI: "Anti-Fraud (Suspicious IMEI)"
+      Financial_Fraud: "Anti-Fraud (Financial Fraud)"
+  ready-marker:
+    enabled: true
+    suffix: ".ready"
+  stability:
+    enabled: true
+    checks: 2
+    interval: 2s
+  validation:
+    min-record-count: 1
+    max-record-count: 20000000
+    max-invalid-rows: 0
+    apply-api-msisdn-rules: true
+    require-known-headers: false
+  retention:
+    processed-files: 14
+    snapshot-files: 3
+  freshness:
+    max-age: 36h
+    fail-readiness-when-stale: true
+  memory:
+    initial-capacity: 12000000
+    load-factor: 0.75
+
+audit:
+  enabled: true
+  async:
+    enabled: true
+    queue-size: 65536
+    worker-count: 1
+    overflow-policy: block-with-timeout
+    overflow-timeout-ms: 10
+  log:
+    directory: /opt/msisdn-api/logs/audit
+    active-subdir: active
+    completed-subdir: completed
+    archive-subdir: archive
+    quarantine-subdir: quarantine
+  rotation:
+    max-file-size: 64MB
+    max-file-age: 15m
+  flush-interval: 1s
+  recovery:
+    enabled: true
+    quarantine-truncated: true
+  retention:
+    archive-after: 24h
+    delete-completed-after-processed: true
+    archive-max-age: 7d
+    quarantine-max-age: 30d
+  format: jsonl
+
+oracle-audit:
+  enabled: true
+  jdbc-url: ${ORACLE_JDBC_URL:jdbc:oracle:thin:@//localhost:1521/ORCLPDB1}
+  username: ${ORACLE_USERNAME:MSISDN_API}
+  password: ${ORACLE_PASSWORD:}
+  schema: FMSPRD6
+  table: MSISDN_ELIGIBILITY_AUDIT
+  pool:
+    maximum-pool-size: 4
+    minimum-idle: 1
+    connection-timeout-ms: 3000
+    idle-timeout-ms: 600000
+    max-lifetime-ms: 1800000
+    validation-timeout-ms: 2000
+    keepalive-time-ms: 120000
+    initialization-fail-timeout-ms: -1
+  batch:
+    size: 1000
+    flush-interval-ms: 1000
+  retry:
+    max-attempts: 8
+    initial-backoff-ms: 500
+    max-backoff-ms: 60000
+    multiplier: 2.0
+  network:
+    connect-timeout-ms: 5000
+    read-timeout-ms: 30000
+    query-timeout-seconds: 30
+  checkpoint-directory: /opt/msisdn-api/data/checkpoints/oracle
+  poll-interval: 2s
+
+csv-export:
+  enabled: true
+  destination-directory: /opt/msisdn-api/data/export
+  filename-prefix: eligibility-audit
+  delimiter: ","
+  include-header: true
+  encoding: UTF-8
+  max-file-size: 64MB
+  max-file-age: 15m
+  checkpoint-directory: /opt/msisdn-api/data/checkpoints/csv
+  poll-interval: 2s
+  formula-injection-protection: true
+  retry:
+    max-attempts: 8
+    initial-backoff-ms: 500
+    max-backoff-ms: 60000
+    multiplier: 2.0
+
+monitoring:
+  blacklist-freshness-threshold: 36h
+  audit-queue-warning-threshold: 0.8
+  audit-queue-readiness-threshold: 0.99
+  disk-space-threshold-bytes: 1073741824
+  disk-path: /opt/msisdn-api
+  oracle-backlog-threshold: 100000
+  csv-backlog-threshold: 100000
+
+security:
+  enabled: true
+  api-key-header: X-API-Key
+  api-key: ${MSISDN_API_KEY:}
+  protect-actuator: true
+  unprotected-paths:
+    - /actuator/health/liveness
+    - /actuator/health/readiness
