@@ -1,0 +1,6 @@
+# Optional watchdog. Prefer systemd Restart=on-failure for process crashes.
+# Cron runs at the start of each minute. It cannot recover a crash immediately.
+# Install with scripts/setup-cron.sh or add this line to the msisdn user crontab.
+# Do not install this entry on a host where another copy of the API is started
+# outside systemd. The watchdog uses systemctl when the unit is enabled.
+* * * * * /opt/msisdn-api/scripts/watchdog.sh >> /opt/msisdn-api/logs/application/watchdog.log 2>&1
