@@ -1,6 +1,5 @@
-# Optional watchdog. Prefer systemd Restart=on-failure for process crashes.
+# Watchdog for an account that does not use sudo, such as FMSUser.
+# install.sh rewrites /opt/msisdn-api to the real install directory.
 # Cron runs at the start of each minute. It cannot recover a crash immediately.
-# Install with scripts/setup-cron.sh or add this line to the msisdn user crontab.
-# Do not install this entry on a host where another copy of the API is started
-# outside systemd. The watchdog uses systemctl when the unit is enabled.
+# Install with scripts/setup-cron.sh. Do not add this line twice.
 * * * * * /opt/msisdn-api/scripts/watchdog.sh >> /opt/msisdn-api/logs/application/watchdog.log 2>&1

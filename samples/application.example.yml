@@ -1,7 +1,8 @@
-# Production configuration for /opt/msisdn-api/application.yml.
-# Secrets come from the environment. Do not put passwords in this file.
-# Every setting below is read by the application. A change requires a restart,
-# except publishing a new blacklist CSV into the configured input directory.
+# Production configuration. The packaged paths use /opt/msisdn-api.
+# scripts/install.sh rewrites that prefix. As FMSUser the install directory
+# is $HOME/msisdn-api, and this file is rewritten there. Do not put passwords
+# in this file. A YAML change requires a restart. Publishing a new blacklist
+# CSV into the incoming directory does not.
 
 server:
   port: 8080

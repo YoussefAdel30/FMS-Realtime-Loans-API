@@ -2,6 +2,8 @@
 Description=MSISDN Eligibility Validation API
 After=network-online.target
 Wants=network-online.target
+# This unit is for an administrator. FMSUser does not install it.
+# FMSUser runs scripts/start.sh and scripts/setup-cron.sh from the home directory.
 
 [Service]
 Type=simple

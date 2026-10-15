@@ -2,6 +2,8 @@
 
 Run these tests on a non-production host. Tests 14, 15, 16, and 17 stop dependencies or the process. Do not run them against production.
 
+`FMSUser` installs into `$HOME/msisdn-api` and does not use sudo. The commands below say `/opt/msisdn-api`. Replace that prefix with `$HOME/msisdn-api` after `scripts/install.sh`. Tests 14, 16, and 18 include a version `FMSUser` can run. Firewall changes, immutable flags, and a host reboot need an administrator.
+
 Record the date, the JAR checksum, the blacklist version, and the pass or fail result for each test.
 
 ## Test 1 — Verify Java installation
@@ -282,19 +284,23 @@ scripts/status.sh
 
 **Prerequisites.** Non-production database. You can block the listener or change the URL in a copy of the environment file.
 
-**Commands.**
+**Commands.** As `FMSUser`, point the service at an unreachable listener and restart. Restore the real URL afterwards.
 
 ```bash
-# Block the database port from this host only, for example with a local firewall rule you can remove.
-sudo firewall-cmd --add-rich-rule='rule family="ipv4" port port="1521" protocol="tcp" reject' 
+cp "$HOME/msisdn-api/msisdn-api.env" /tmp/msisdn-api.env.bak
+sed -i 's|^ORACLE_JDBC_URL=.*|ORACLE_JDBC_URL=jdbc:oracle:thin:@//127.0.0.1:1/UNREACHABLE|' "$HOME/msisdn-api/msisdn-api.env"
+"$HOME/msisdn-api/scripts/restart.sh"
 for i in 1 2 3; do
   curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
     -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
     -d '{"msisdn":"201055555555"}'
 done
-ls /opt/msisdn-api/logs/audit/completed
-sudo firewall-cmd --remove-rich-rule='rule family="ipv4" port port="1521" protocol="tcp" reject'
+ls "$HOME/msisdn-api/logs/audit/completed"
+cp /tmp/msisdn-api.env.bak "$HOME/msisdn-api/msisdn-api.env"
+"$HOME/msisdn-api/scripts/restart.sh"
 ```
+
+An administrator can instead block port 1521 with `firewall-cmd`. `FMSUser` cannot.
 
 **Expected response.** The three API calls return 200. Completed segments accumulate while the database is blocked. After the port is restored, new rows appear and the checkpoints become `complete: true`. Liveness stays UP during the outage. The watchdog log does not show a restart caused by the outage.
 
@@ -328,18 +334,18 @@ done
 
 **Objective.** An unavailable export directory retains the source segment, and export resumes later.
 
-**Command.**
+**Command.** `FMSUser` owns the export directory and can remove write permission without sudo.
 
 ```bash
-sudo chattr +i /opt/msisdn-api/data/export 2>/dev/null || sudo mount -o remount,ro /opt/msisdn-api/data/export
+chmod a-w "$HOME/msisdn-api/data/export"
 # Generate a completed segment with Test 4, then:
-ls /opt/msisdn-api/logs/audit/completed
-sudo chattr -i /opt/msisdn-api/data/export 2>/dev/null || sudo mount -o remount,rw /opt/msisdn-api/data/export
+ls "$HOME/msisdn-api/logs/audit/completed"
+chmod u+w "$HOME/msisdn-api/data/export"
 sleep 5
-ls /opt/msisdn-api/data/export
+ls "$HOME/msisdn-api/data/export"
 ```
 
-Use a directory you are allowed to make read-only. Do not remount a production filesystem.
+Do not remount a filesystem. That requires an administrator.
 
 **Expected response.** While the destination is unavailable, completed JSONL files remain. After it is writable, a `.csv` file appears and the checkpoint completes.
 
@@ -371,29 +377,26 @@ pgrep -af msisdn-api.jar
 
 ## Test 18 — Server reboot recovery
 
-**Objective.** systemd starts the service after reboot, and the watchdog does not fight it.
+**Objective.** After a host reboot, the `FMSUser` crontab starts one API process. `FMSUser` cannot reboot the machine. An administrator does that on a lab host. Do not reboot production for this test.
 
-**Prerequisites.** `systemctl enable msisdn-api` was run. This reboots the host. Use a lab host.
+**Prerequisites.** `scripts/setup-cron.sh` has been run as `FMSUser`. Confirm with `crontab -l` before the reboot.
 
-**Command.**
-
-```bash
-sudo systemctl enable msisdn-api
-sudo shutdown -r now
-```
-
-After the host returns:
+**Command.** Ask the administrator to reboot the lab host. After it returns, as `FMSUser`:
 
 ```bash
-systemctl status msisdn-api --no-pager
-/opt/msisdn-api/scripts/healthcheck.sh
+crontab -l
+"$HOME/msisdn-api/scripts/status.sh"
+"$HOME/msisdn-api/scripts/healthcheck.sh"
+pgrep -af msisdn-api.jar
 ```
 
-**Expected response.** The unit is active. Liveness becomes UP. Readiness becomes UP after the snapshot loads. The watchdog, if installed, does not launch a second JVM during the grace period.
+Wait up to three minutes if cron has not fired yet.
 
-**Verification.** `ps -ef | grep msisdn-api.jar` shows one process owned by `msisdn`.
+**Expected response.** One process is running, owned by `FMSUser`. Liveness becomes UP. Readiness becomes UP after the snapshot loads. `watchdog.log` shows a single start. A second JVM is not present.
 
-**Pass.** One service, enabled unit, healthcheck exit 0. **Fail.** The unit failed, or a shell-started JVM is running beside systemd.
+**Verification.** `ps -ef | grep msisdn-api.jar` shows one process.
+
+**Pass.** One process and healthcheck exit 0. **Fail.** No process after several cron minutes, or two processes.
 
 ## Test 19 — Concurrent requests
 

@@ -2,7 +2,7 @@
 
 Operations and technical guide for the real-time eligibility service. The service answers whether a mobile number (MSISDN) may proceed with an operation. It decides that from an in-memory blacklist. It does not query Oracle on the request path.
 
-This document assumes you have never seen the repository. Paths below use the production install root `/opt/msisdn-api`. A developer checkout uses the same relative layout under the working directory when the classpath `src/main/resources/application.yml` is active.
+This document assumes you have never seen the repository. The packaged configuration uses `/opt/msisdn-api` as a prefix. When `FMSUser` runs `scripts/install.sh`, that prefix is rewritten to `$HOME/msisdn-api`. Commands below show both forms. A developer checkout uses the classpath `src/main/resources/application.yml` and relative directories.
 
 ---
 
@@ -134,7 +134,7 @@ Java packages:
 | Disk | Incoming CSV, one snapshot copy, audit segments, Oracle backlog, and CSV export. Plan for the CSV size plus at least 36 hours of audit at the real request rate. The readiness floor defaults to 1 GiB free on `/opt/msisdn-api`. |
 | Network | Inbound HTTP on port 8080 from the calling network. Outbound TCP to the Oracle listener. No Redis, Kafka, or extra brokers. |
 | Oracle | A reachable service, schema owner `FMSPRD6`, runtime user `MSISDN_API` with `CREATE SESSION`, `INSERT`, and `SELECT` only. |
-| Permissions | The `msisdn` user owns `/opt/msisdn-api`. It is not root. The env file mode is 640. |
+| Permissions | `FMSUser` owns `$HOME/msisdn-api` and does not need sudo. The env file mode is 600. A root install under `/opt/msisdn-api` remains available for an administrator. |
 
 ---
 
@@ -176,31 +176,42 @@ The release tree must not contain `msisdn-api.env`, passwords, or API keys. `app
 
 ## Chapter 6 — Installing on RHEL
 
-1. Install OpenJDK 17 so `/opt/java/jdk-17/bin/java` exists, or set `JAVA_HOME` in the env file to the real JDK 17 path.
-2. Copy the `release/` directory to the host.
-3. As root, from that directory:
+`FMSUser` does not use sudo. systemd system units, `/opt`, and `useradd` all require an administrator, so the supported install for this account is a directory it already owns.
+
+1. Confirm Java 17 is already on the host and executable by `FMSUser`:
 
 ```bash
-sudo TARGET_DIR=/opt/msisdn-api scripts/install.sh
+java -version
 ```
 
-The script creates the system user `msisdn` with shell `/sbin/nologin` when the user is missing, copies the JAR, configuration, SQL, scripts, and unit file, creates data and log directories, and writes `/opt/msisdn-api/msisdn-api.env` only when that file does not already exist.
+The first line must contain version 17. If `java` is a different version, set `JAVA_HOME` in the env file to a JDK 17 directory `FMSUser` can execute. Do not install a JDK under `/opt` yourself; that directory is not writable.
 
-4. Edit `/opt/msisdn-api/msisdn-api.env`. Set `ORACLE_JDBC_URL`, `ORACLE_USERNAME`, `ORACLE_PASSWORD`, and `MSISDN_API_KEY`. Leave `USE_SYSTEMD=auto`.
-5. Confirm `config/application.yml` paths match `/opt/msisdn-api`. The installed copy is `/opt/msisdn-api/application.yml`.
-6. Run the SQL in Chapter 11 as `FMSPRD6` and a DBA. The application does not create the table.
-7. Publish the first blacklist as described in Chapter 8. Readiness stays down until a valid file is loaded.
-8. Install and start the unit:
+2. Copy the `release/` directory to a place `FMSUser` can read, for example `$HOME/release`.
+3. From that directory, as `FMSUser`:
 
 ```bash
-sudo cp /opt/msisdn-api/deploy/msisdn-api.service /etc/systemd/system/msisdn-api.service
-sudo systemctl daemon-reload
-sudo systemctl enable msisdn-api
-sudo systemctl start msisdn-api
-sudo systemctl status msisdn-api
+scripts/install.sh
 ```
 
-`install.sh` already copies the unit and reloads systemd when `/etc/systemd/system` exists. Enable and start remain explicit.
+The default target is `$HOME/msisdn-api`. Override it with `TARGET_DIR` only when that path is writable by `FMSUser`:
+
+```bash
+TARGET_DIR=$HOME/apps/msisdn-api scripts/install.sh
+```
+
+The script copies the JAR, configuration, SQL, and scripts, creates the data and log directories, and rewrites every `/opt/msisdn-api` path in the installed YAML, Log4j2 file, and docs to the target directory. It writes `$HOME/msisdn-api/msisdn-api.env` only when that file does not already exist. It does not call `systemctl` and does not change ownership to another user.
+
+4. Edit `$HOME/msisdn-api/msisdn-api.env`. Set `ORACLE_JDBC_URL`, `ORACLE_USERNAME`, `ORACLE_PASSWORD`, and `MSISDN_API_KEY`. Leave `USE_SYSTEMD=false`.
+5. Confirm `$HOME/msisdn-api/application.yml` now points at `$HOME/msisdn-api/data` and `$HOME/msisdn-api/logs`.
+6. Ask a DBA to run the SQL in Chapter 11 as `FMSPRD6`. `FMSUser` does not need a database administrator login. The application does not create the table.
+7. Publish the first blacklist into `$HOME/msisdn-api/data/blacklist/incoming`, then create the `.ready` marker. Readiness stays down until a valid file is loaded.
+8. Start the process and install the watchdog as `FMSUser`:
+
+```bash
+$HOME/msisdn-api/scripts/start.sh
+$HOME/msisdn-api/scripts/setup-cron.sh
+crontab -l
+```
 
 9. Check health:
 
@@ -209,13 +220,19 @@ curl -fsS --max-time 5 http://127.0.0.1:8080/actuator/health/liveness
 curl -fsS --max-time 5 http://127.0.0.1:8080/actuator/health/readiness
 ```
 
+Port 8080 does not require root. If it is already taken, change `server.port` in `application.yml` and `HTTP_PORT` in `msisdn-api.env` together, then run `scripts/restart.sh`.
+
+The cron watchdog is the process supervisor for `FMSUser`. A user crontab survives an SSH logout and a host reboot, as long as the host allows cron for that account. `nohup` in `start.sh` keeps the JVM running after you disconnect.
+
+An administrator who can become root may still install to `/opt/msisdn-api` and enable `deploy/msisdn-api.service`. `FMSUser` should not do that, and the shell scripts ignore systemctl when they are not running as root, so they will not fail by trying to manage a unit they cannot control.
+
 Put TLS in front of the process. Terminate TLS at a reverse proxy or a load balancer and forward HTTP to `127.0.0.1:8080`. The embedded server speaks HTTP.
 
 ---
 
 ## Chapter 7 — Configuration Reference
 
-Production values live in `/opt/msisdn-api/application.yml`, loaded with `--spring.config.additional-location`. The classpath file remains inside the JAR for local runs. External keys override the classpath.
+Production values live in the installed `application.yml`, loaded with `--spring.config.additional-location`. For `FMSUser` that file is `$HOME/msisdn-api/application.yml`. The packaged defaults still say `/opt/msisdn-api` until `install.sh` rewrites them. The classpath file remains inside the JAR for local runs. External keys override the classpath.
 
 Every YAML change requires a process restart. Publishing a new blacklist CSV into the incoming directory does not. Credentials are environment variables, read from `msisdn-api.env` by systemd and by the shell scripts.
 
@@ -588,22 +605,15 @@ Recovery:
 - A crash while the `.part` file is open rewrites from the last consistent checkpoint. A size mismatch deletes the part file and rewinds.
 - A crash after the rename and before the checkpoint notices that the final `.csv` already exists and does not append those rows again.
 
-Export files are the operational copy for analysts. They are not a second source of truth ahead of the audit segments. Restrict directory permissions to the `msisdn` group. MSISDNs in these files are complete, because the export is the audit record.
+Export files are the operational copy for analysts. They are not a second source of truth ahead of the audit segments. The directory is owned by `FMSUser` and mode 750. MSISDNs in these files are complete, because the export is the audit record.
 
 ---
 
 ## Chapter 13 — Starting and Stopping
 
-Shell scripts detect an enabled systemd unit and delegate to it when `USE_SYSTEMD=auto`. They do not start a second JVM next to systemd.
+`FMSUser` uses the shell scripts. They do not call `systemctl` unless the script itself is running as root, so a missing sudo password cannot block a start or a stop.
 
-```bash
-sudo systemctl start msisdn-api
-sudo systemctl stop msisdn-api
-sudo systemctl restart msisdn-api
-sudo systemctl status msisdn-api
-```
-
-Without systemd, from `/opt/msisdn-api`:
+From `$HOME/msisdn-api`:
 
 ```bash
 scripts/start.sh
@@ -621,21 +631,20 @@ scripts/healthcheck.sh
 
 `healthcheck.sh` returns 0 when liveness is up. Exit 3 means the process is gone. Exit 4 means liveness is down. A readiness failure alone returns 0, because an Oracle outage or a stale blacklist must not page a process restart.
 
-Logs:
+Logs for an `FMSUser` install:
 
 ```bash
-sudo journalctl -u msisdn-api -f
-tail -f /opt/msisdn-api/logs/application/application.log
-tail -f /opt/msisdn-api/logs/application/console.log
+tail -f "$HOME/msisdn-api/logs/application/application.log"
+tail -f "$HOME/msisdn-api/logs/application/console.log"
 ```
 
-`console.log` is the shell-script redirect. systemd captures the same stream in the journal. Application and audit files are under `logs/`.
+`console.log` is the shell-script redirect. `MSISDN_LOG_DIR` in the env file is what Log4j2 uses, so application logs stay under the install directory instead of `/opt/msisdn-api`. An administrator who installed the system unit can also use `journalctl -u msisdn-api -f`.
 
 ---
 
 ## Chapter 14 — Cron Watchdog
 
-systemd already restarts the process after an unexpected exit (`Restart=on-failure`, `RestartSec=5`). The cron watchdog is optional. Use it when the host might kill the process without systemd noticing, or when you want a liveness probe outside the unit.
+For `FMSUser` this watchdog is the supervisor. There is no systemd unit, because installing one needs root. The crontab of `FMSUser` starts the process again after a crash and after a reboot. Recovery waits until the next minute, and until the configured number of failed liveness checks.
 
 The watchdog:
 
@@ -644,25 +653,25 @@ The watchdog:
 3. When the process is up, it calls the liveness URL with a short timeout. Readiness is not consulted.
 4. It restarts only after `WATCHDOG_LIVENESS_FAILURES` consecutive failures (default 3). One failed probe does not restart.
 5. It will not restart during `WATCHDOG_GRACE_SECONDS` after a start (default 180) or during `WATCHDOG_COOLDOWN_SECONDS` (default 300). It stops after `WATCHDOG_MAX_RESTARTS_PER_HOUR` (default 4).
-6. With systemd enabled it runs `systemctl restart`. Otherwise it runs `start.sh`. It never launches Java itself.
+6. As `FMSUser` it runs `start.sh`. It never launches Java itself, and it does not call `systemctl`.
 
 Cron runs once a minute. Recovery is therefore at least one minute, and three minutes with the default failure count. It is not an instant restarter.
 
-Install and remove:
+Install and remove as `FMSUser`:
 
 ```bash
-sudo /opt/msisdn-api/scripts/setup-cron.sh
-sudo crontab -l
-sudo /opt/msisdn-api/scripts/uninstall-cron.sh
+$HOME/msisdn-api/scripts/setup-cron.sh
+crontab -l
+$HOME/msisdn-api/scripts/uninstall-cron.sh
 ```
 
-The installed line matches `deploy/crontab.example`:
+After `install.sh`, the line looks like this, with the home directory filled in:
 
 ```cron
-* * * * * /opt/msisdn-api/scripts/watchdog.sh >> /opt/msisdn-api/logs/application/watchdog.log 2>&1
+* * * * * /home/FMSUser/msisdn-api/scripts/watchdog.sh >> /home/FMSUser/msisdn-api/logs/application/watchdog.log 2>&1
 ```
 
-`setup-cron.sh` refuses to add a second copy of that line. Inspect `watchdog.log` and `run/watchdog.state`. If both supervisors are present, leave `USE_SYSTEMD=auto` so the cron script only calls systemctl.
+`setup-cron.sh` installs that line into the crontab of the user who runs it. It refuses to add a second copy. Inspect `watchdog.log` and `run/watchdog.state`. Leave `USE_SYSTEMD=false`.
 
 ---
 
@@ -692,9 +701,9 @@ JVM heap is visible through Actuator `jvm.memory.used`. The reload allocates a s
 
 ## Chapter 16 — Troubleshooting
 
-**API not starting.** Read `journalctl -u msisdn-api -n 200` or `logs/application/console.log`. Startup validation prints the rejected property. A missing directory is created by the application; a missing parent mount is not.
+**API not starting.** Read `$HOME/msisdn-api/logs/application/console.log`. Startup validation prints the rejected property. A missing directory is created by the application when the parent is writable. A path that still says `/opt/msisdn-api` means `install.sh` was not used; `FMSUser` cannot create that directory.
 
-**Wrong Java version.** `scripts/start.sh` accepts only a binary whose `-version` string contains 17. Point `JAVA_HOME` at JDK 17. The systemd unit calls `/opt/java/jdk-17/bin/java` directly.
+**Wrong Java version.** `scripts/start.sh` accepts only a binary whose `-version` string contains 17. Set `JAVA_HOME` in `msisdn-api.env` to a JDK 17 tree `FMSUser` can execute.
 
 **Port already in use.** `ss -ltnp | grep 8080`. Stop the other process or change `server.port` and `HTTP_PORT` together, then restart.
 
@@ -726,11 +735,11 @@ JVM heap is visible through Actuator `jvm.memory.used`. The reload allocates a s
 
 ## Chapter 17 — Recovery
 
-**Graceful restart.** `systemctl restart` sends SIGTERM. Tomcat stops, writers flush and rotate, the Oracle thread runs one pass, checkpoints move, and the new process loads the snapshot from disk.
+**Graceful restart.** `scripts/restart.sh` sends SIGTERM. Tomcat stops, writers flush and rotate, the Oracle thread runs one pass, checkpoints move, and the new process loads the snapshot from disk.
 
 **JVM crash.** Active segments are recovered on the next start. Complete lines are ingested. The torn last line is quarantined and is not inserted. Queued events that never reached disk are gone.
 
-**Server reboot.** `systemctl enable` starts the unit after `network-online.target`. The cron line survives reboot. The first watchdog pass is inside the grace period, so it will not fight the unit's own start.
+**Server reboot.** `FMSUser` cannot reboot the host. The user crontab survives a reboot performed by an administrator. On the first minute after cron starts, the watchdog sees that the process is down and runs `start.sh`. It does not require systemd.
 
 **Oracle outage.** Completed segments accumulate. When the listener accepts connections, the writer continues from the checkpoint. Re-inserted request ids are ignored.
 
@@ -750,7 +759,7 @@ Daily:
 
 - Confirm readiness is up and `blacklist.version` is today's file.
 - Confirm `oracle.status` and `csvExport.status` are `UP`, or that a known outage is still retrying.
-- Confirm free space on `/opt/msisdn-api` is comfortably above 1 GiB.
+- Confirm free space on the filesystem that holds `$HOME/msisdn-api` is comfortably above 1 GiB.
 - Skim `watchdog.log` for suppressed restarts.
 
 Weekly:
@@ -767,16 +776,16 @@ Blacklist validation before publication: check the header, the row count against
 
 Oracle maintenance is statistics and, when legal and approved, partition or archive moves written by a DBA. The application account cannot delete rows. `sql/07_maintenance.sql` keeps destructive statements commented and warns that they remove production audit history.
 
-Updating the JAR:
+Updating the JAR as `FMSUser`:
 
 ```bash
-sudo systemctl stop msisdn-api
-sudo cp msisdn-api.jar /opt/msisdn-api/msisdn-api.jar
-sudo chown msisdn:msisdn /opt/msisdn-api/msisdn-api.jar
-sudo systemctl start msisdn-api
+cp "$HOME/msisdn-api/msisdn-api.jar" "$HOME/msisdn-api/msisdn-api.jar.prev"
+"$HOME/msisdn-api/scripts/stop.sh"
+cp msisdn-api.jar "$HOME/msisdn-api/msisdn-api.jar"
+"$HOME/msisdn-api/scripts/start.sh"
 ```
 
-Keep the previous JAR as `/opt/msisdn-api/msisdn-api.jar.prev`. Rolling back is the same three commands with that file. Configuration and checkpoint directories stay in place, so Oracle and CSV resume from the last offset. Do not start two versions at once.
+Rolling back is the same stop, copy `msisdn-api.jar.prev` back to `msisdn-api.jar`, and start. Configuration and checkpoint directories stay in place, so Oracle and CSV resume from the last offset. Do not start two versions at once.
 
 ---
 

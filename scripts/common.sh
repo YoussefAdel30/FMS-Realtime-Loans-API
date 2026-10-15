@@ -40,8 +40,9 @@ LIVENESS_URL="${LIVENESS_URL:-http://127.0.0.1:${HTTP_PORT}/actuator/health/live
 READINESS_URL="${READINESS_URL:-http://127.0.0.1:${HTTP_PORT}/actuator/health/readiness}"
 STATUS_URL="${STATUS_URL:-http://127.0.0.1:${HTTP_PORT}/api/v1/system/status}"
 SERVICE_NAME="${SERVICE_NAME:-msisdn-api}"
-RUN_USER="${RUN_USER:-msisdn}"
+RUN_USER="${RUN_USER:-$(id -un)}"
 USE_SYSTEMD="${USE_SYSTEMD:-auto}"
+export MSISDN_LOG_DIR="${MSISDN_LOG_DIR:-${INSTALL_DIR}/logs}"
 WATCHDOG_LIVENESS_FAILURES="${WATCHDOG_LIVENESS_FAILURES:-3}"
 WATCHDOG_GRACE_SECONDS="${WATCHDOG_GRACE_SECONDS:-180}"
 WATCHDOG_COOLDOWN_SECONDS="${WATCHDOG_COOLDOWN_SECONDS:-300}"
@@ -123,6 +124,11 @@ systemd_unit_enabled() {
 }
 
 use_systemd() {
+    # A system unit can be started only by an administrator. FMSUser runs the
+    # shell scripts and the user crontab instead, even when USE_SYSTEMD=auto.
+    if [[ "$(id -u)" -ne 0 ]]; then
+        return 1
+    fi
     case "${USE_SYSTEMD}" in
         true|TRUE|yes|YES|1) systemd_unit_enabled ;;
         false|FALSE|no|NO|0) return 1 ;;

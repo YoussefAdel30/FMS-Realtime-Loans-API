@@ -34,4 +34,4 @@ curl -s http://127.0.0.1:8080/api/v1/eligibility/check \
 
 ## Production
 
-Install the `release/` tree on RHEL with `sudo scripts/install.sh`, then use systemd. The cron watchdog is optional and must not be a second process supervisor. See chapters 6, 13, and 14 of `docs.md`.
+On a host you reach as `FMSUser`, do not use sudo. From the release directory run `scripts/install.sh`. It installs into `$HOME/msisdn-api`, rewrites the `/opt/msisdn-api` paths, and leaves systemd alone. Start with `scripts/start.sh` and install the one-minute watchdog with `scripts/setup-cron.sh`. See chapters 6, 13, and 14 of `docs.md`.

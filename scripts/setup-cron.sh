@@ -42,4 +42,4 @@ else
 fi
 
 log "installed watchdog cron for ${TARGET_USER}: ${LINE}"
-log "cron runs once per minute and is not an immediate supervisor. Prefer systemd."
+log "cron runs once per minute. With USE_SYSTEMD=false this crontab is what brings the process back."
