@@ -1,0 +1,5 @@
+# Watchdog for an account that does not use sudo, such as FMSUser.
+# install.sh rewrites /opt/msisdn-api to the real install directory.
+# Cron runs at the start of each minute. It cannot recover a crash immediately.
+# Install with scripts/setup-cron.sh. Do not add this line twice.
+* * * * * /opt/msisdn-api/scripts/watchdog.sh >> /opt/msisdn-api/logs/application/watchdog.log 2>&1

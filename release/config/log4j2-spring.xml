@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="60">
+    <Properties>
+        <Property name="LOG_DIR">${env:MSISDN_LOG_DIR:-/opt/msisdn-api/logs}</Property>
+    </Properties>
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%t] %c{1.} %X{requestId} - %msg%n"/>
+        </Console>
+        <RollingFile name="ApplicationFile"
+                     fileName="${LOG_DIR}/application/application.log"
+                     filePattern="${LOG_DIR}/application/application-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%t] %c{1.} %X{requestId} - %msg%n"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1"/>
+                <SizeBasedTriggeringPolicy size="50 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="14"/>
+        </RollingFile>
+        <Async name="AsyncApplication" bufferSize="8192" blocking="true">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="ApplicationFile"/>
+        </Async>
+    </Appenders>
+    <Loggers>
+        <Logger name="com.company.msisdn" level="info" additivity="false">
+            <AppenderRef ref="AsyncApplication"/>
+        </Logger>
+        <Root level="info">
+            <AppenderRef ref="AsyncApplication"/>
+        </Root>
+    </Loggers>
+</Configuration>
