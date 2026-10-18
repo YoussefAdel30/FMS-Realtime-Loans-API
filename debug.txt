@@ -1,0 +1,18 @@
+[FMSUser@DCHQFMSDET2 realtime_loans_api]$ cd scripts/
+[FMSUser@DCHQFMSDET2 scripts]$ chmod 775 *
+[FMSUser@DCHQFMSDET2 scripts]$ cd ..
+[FMSUser@DCHQFMSDET2 realtime_loans_api]$ TARGET_DIR=/app/scripts/utilities/realtime_loans_api scripts/install.sh
+cp: '/app/scripts/utilities/realtime_loans_api/msisdn-api.jar' and '/app/scripts/utilities/realtime_loans_api/msisdn-api.jar' are the same file
+[FMSUser@DCHQFMSDET2 realtime_loans_api]$ ll
+total 61616
+-rw-rw-r-- 1 FMSUser FMSUser     5407 Oct 18 15:12 application.yml
+drwxrwxr-x 2 FMSUser FMSUser       31 Oct 18 15:20 config
+drwxrwxr-x 2 FMSUser FMSUser       55 Oct 18 15:20 deploy
+-rw-rw-r-- 1 FMSUser FMSUser    54057 Oct 18 15:12 docs.md
+-rw-rw-r-- 1 FMSUser FMSUser 63014112 Oct 18 15:20 msisdn-api.jar
+-rw-rw-r-- 1 FMSUser FMSUser     1813 Oct 18 15:20 README.md
+drwxrwxr-x 2 FMSUser FMSUser     4096 Oct 18 15:20 scripts
+drwxrwxr-x 2 FMSUser FMSUser     4096 Oct 18 15:20 sql
+drwxrwxr-x 2 FMSUser FMSUser       51 Oct 18 15:20 tests
+[FMSUser@DCHQFMSDET2 realtime_loans_api]$ pwd
+/app/scripts/utilities/realtime_loans_api
