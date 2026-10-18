@@ -61,3 +61,70 @@ EOF
 touch /app/scripts/utilities/realtime_loans_api/data/blacklist/incoming/blacklist-20261015.csv.ready
 
 
+
+[FMSUser@DCHQFMSDET2 scripts]$ ./start.sh
+2026-10-18T12:35:42Z using Java /app/scripts/utilities/jdk-17/jdk-17.0.17/bin/java
+java version "17.0.17" 2025-10-21 LTS
+Java(TM) SE Runtime Environment (build 17.0.17+8-LTS-360)
+Java HotSpot(TM) 64-Bit Server VM (build 17.0.17+8-LTS-360, mixed mode, sharing)
+2026-10-18T12:35:42Z starting /app/scripts/utilities/realtime_loans_api/msisdn-api.jar
+2026-10-18T12:35:42Z started pid 2264251; waiting up to 180s for readiness
+2026-10-18T12:35:45Z ERROR: process 2264251 exited during startup. See /app/scripts/utilities/realtime_loans_api/logs/application/console.log
+[FMSUser@DCHQFMSDET2 scripts]$ tail -80 /app/scripts/utilities/realtime_loans_api/logs/application/console.log
+MSISDN Eligibility Validation API 1.0.0
+
+2026-10-18T15:35:43.366+03:00 INFO  [background-preinit] o.h.v.i.u.Version  - HV000001: Hibernate Validator 8.0.2.Final
+2026-10-18T15:35:43.423+03:00 INFO  [main] c.c.m.Application  - Starting Application v1.0.0 using Java 17.0.17 with PID 2264251 (/app2/scripts/utilities/realtime_loans_api/msisdn-api.jar started by FMSUser in /app2/scripts/utilities/realtime_loans_api/scripts)
+2026-10-18T15:35:43.427+03:00 INFO  [main] c.c.m.Application  - No active profile set, falling back to 1 default profile: "default"
+2026-10-18T15:35:44.663+03:00 INFO  [main] o.s.b.w.e.t.TomcatWebServer  - Tomcat initialized with port 8080 (http)
+2026-10-18T15:35:44.676+03:00 INFO  [main] o.a.c.h.Http11NioProtocol  - Initializing ProtocolHandler ["http-nio-0.0.0.0-8080"]
+2026-10-18T15:35:44.678+03:00 INFO  [main] o.a.c.c.StandardService  - Starting service [Tomcat]
+2026-10-18T15:35:44.678+03:00 INFO  [main] o.a.c.c.StandardEngine  - Starting Servlet engine: [Apache Tomcat/10.1.42]
+2026-10-18T15:35:44.723+03:00 INFO  [main] o.a.c.c.C.[.[.[/]  - Initializing Spring embedded WebApplicationContext
+2026-10-18T15:35:44.724+03:00 INFO  [main] o.s.b.w.s.c.ServletWebServerApplicationContext  - Root WebApplicationContext: initialization completed in 1254 ms
+2026-10-18T15:35:45.109+03:00 WARN  [main] o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext  - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'auditWorkers' defined in URL [jar:nested:/app2/scripts/utilities/realtime_loans_api/msisdn-api.jar/!BOOT-INF/classes/!/com/company/msisdn/audit/AuditWorkers.class]: Unsatisfied dependency expressed through constructor parameter 2: Error creating bean with name 'api-com.company.msisdn.config.ApiProperties': Could not bind properties to 'ApiProperties' : prefix=api, ignoreInvalidFields=false, ignoreUnknownFields=true
+2026-10-18T15:35:45.113+03:00 INFO  [main] o.a.c.c.StandardService  - Stopping service [Tomcat]
+2026-10-18T15:35:45.214+03:00 INFO  [main] o.s.b.a.l.ConditionEvaluationReportLogger  -
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-10-18T15:35:45.232+03:00 ERROR [main] o.s.b.d.LoggingFailureAnalysisReporter  -
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Binding to target com.company.msisdn.config.ApiProperties failed:
+
+    Property: api.instanceId
+    Value: ""
+    Origin: URL [file:/app/scripts/utilities/realtime_loans_api/application.yml] - 61:16
+    Reason: must not be blank
+
+
+Action:
+
+Update your application's configuration
+
+[FMSUser@DCHQFMSDET2 scripts]$ cd ..
+[FMSUser@DCHQFMSDET2 realtime_loans_api]$ ll
+total 61620
+-rw-rw-r-- 1 FMSUser FMSUser     5667 Oct 18 15:33 application.yml
+drwxrwxr-x 2 FMSUser FMSUser       31 Oct 18 15:33 config
+drwxr-x--- 5 FMSUser FMSUser       56 Oct 18 15:34 data
+drwxrwxr-x 2 FMSUser FMSUser       55 Oct 18 15:33 deploy
+-rw-rw-r-- 1 FMSUser FMSUser    54421 Oct 18 15:33 docs.md
+drwxr-x--- 4 FMSUser FMSUser       38 Oct 18 15:34 logs
+-rw------- 1 FMSUser FMSUser      364 Oct 18 15:34 msisdn-api.env
+-rw-rw-r-- 1 FMSUser FMSUser 63014112 Oct 18 15:20 msisdn-api.jar
+-rw-rw-r-- 1 FMSUser FMSUser     1839 Oct 18 15:33 README.md
+drwxr-x--- 2 FMSUser FMSUser       51 Oct 18 15:35 run
+drwxrwxr-x 2 FMSUser FMSUser     4096 Oct 18 15:20 scripts
+drwxrwxr-x 2 FMSUser FMSUser     4096 Oct 18 15:33 sql
+drwxrwxr-x 2 FMSUser FMSUser       51 Oct 18 15:33 tests
+[FMSUser@DCHQFMSDET2 realtime_loans_api]$ grep disk-path application.yml
+      path: ${monitoring.disk-path}
+  disk-path: /app/scripts/utilities/realtime_loans_api
+
+
