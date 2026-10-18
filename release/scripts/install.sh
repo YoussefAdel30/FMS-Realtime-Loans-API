@@ -101,7 +101,6 @@ ORACLE_JDBC_URL=jdbc:oracle:thin:@//oracle-host:1521/service_name
 ORACLE_USERNAME=MSISDN_API
 ORACLE_PASSWORD=
 MSISDN_API_KEY=
-MSISDN_INSTANCE_ID=
 EOF
     chmod 600 "${TARGET_DIR}/msisdn-api.env"
 fi
