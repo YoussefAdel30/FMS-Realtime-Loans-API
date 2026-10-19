@@ -1,6 +1,8 @@
 package com.company.msisdn.blacklist;
 
+import com.company.msisdn.config.ApiProperties;
 import com.company.msisdn.config.BlacklistProperties;
+import com.company.msisdn.util.MessageTemplates;
 import com.company.msisdn.exception.BlacklistValidationException;
 import com.company.msisdn.monitoring.ReadinessGate;
 import com.company.msisdn.util.AtomicFiles;
@@ -46,6 +48,7 @@ public class BlacklistReloadService {
     private final Counter reloadFailure;
     private final Timer reloadTimer;
     private final MeterRegistry meterRegistry;
+    private final ApiProperties api;
 
     public BlacklistReloadService(
             BlacklistProperties properties,
@@ -54,7 +57,8 @@ public class BlacklistReloadService {
             ReadinessGate readinessGate,
             ObjectMapper objectMapper,
             Clock clock,
-            MeterRegistry meterRegistry
+            MeterRegistry meterRegistry,
+            ApiProperties api
     ) {
         this.properties = properties;
         this.loader = loader;
@@ -67,6 +71,7 @@ public class BlacklistReloadService {
         this.reloadSuccess = meterRegistry.counter("blacklist.reload.success");
         this.reloadFailure = meterRegistry.counter("blacklist.reload.failure");
         this.reloadTimer = meterRegistry.timer("blacklist.reload");
+        this.api = api;
     }
 
     public void loadInitial() {
@@ -115,12 +120,14 @@ public class BlacklistReloadService {
     public void refreshReadiness() {
         BlacklistSnapshot snapshot = store.current();
         if (snapshot == null) {
-            readinessGate.markNotReady("Blacklist is not loaded");
+            readinessGate.markNotReady(api.error().messages().blacklistNotLoaded());
             return;
         }
         if (properties.freshness().failReadinessWhenStale() && !isFresh(snapshot)) {
-            readinessGate.markNotReady("Blacklist snapshot " + snapshot.version() + " exceeded max age "
-                    + properties.freshness().maxAge());
+            readinessGate.markNotReady(MessageTemplates.apply(
+                    api.error().messages().blacklistStale(),
+                    "version", snapshot.version(),
+                    "maxAge", properties.freshness().maxAge().toString()));
             return;
         }
         readinessGate.markReady();

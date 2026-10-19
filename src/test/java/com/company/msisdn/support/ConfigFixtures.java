@@ -26,8 +26,40 @@ public final class ConfigFixtures {
                 "test-instance",
                 new ApiProperties.Msisdn("^20[0-9]{10}$", 12, 12, "egyptian"),
                 new ApiProperties.Nid("^[0-9]{14}$", 14, 14, "14-digit national id"),
-                new ApiProperties.Response("OK", "KO", true, true, true, true, true),
-                new ApiProperties.Error(ErrorMessageMode.VALIDATION_ONLY, true));
+                new ApiProperties.Response("OK", "KO", "Anti-fraud : ", ", ", true, true, true, true, true),
+                standardError(ErrorMessageMode.VALIDATION_ONLY));
+    }
+
+    public static ApiProperties.Error standardError(ErrorMessageMode mode) {
+        return new ApiProperties.Error(
+                mode,
+                true,
+                new ApiProperties.StatusText(
+                        "Bad Request",
+                        "Unauthorized",
+                        "Unsupported Media Type",
+                        "Service Unavailable",
+                        "Internal Server Error"),
+                new ApiProperties.Messages(
+                        "msisdn is required",
+                        "msisdn length must be between {min} and {max}",
+                        "msisdn does not match the configured pattern",
+                        "nid is required",
+                        "nid length must be between {min} and {max}",
+                        "nid does not match the configured pattern",
+                        "request body is not valid JSON",
+                        "request validation failed",
+                        "{field} {detail}",
+                        "A valid API key is required",
+                        "Content-Type must be application/json",
+                        "An unexpected error occurred",
+                        "{exception}",
+                        "Audit writer is not running",
+                        "Free disk space is below monitoring.disk-space-threshold-bytes",
+                        "Audit queue utilization exceeded the readiness threshold",
+                        "Audit pipeline did not accept the event within {timeout}ms",
+                        "Blacklist is not loaded",
+                        "Blacklist snapshot {version} exceeded max age {maxAge}"));
     }
 
     public static BlacklistProperties blacklist(Path root, DuplicatePolicy policy) {

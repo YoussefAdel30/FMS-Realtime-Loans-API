@@ -1,5 +1,6 @@
 package com.company.msisdn.security;
 
+import com.company.msisdn.config.ErrorResponses;
 import com.company.msisdn.config.SecurityProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -9,7 +10,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 import org.springframework.core.Ordered;
@@ -23,11 +23,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private final SecurityProperties security;
+    private final ErrorResponses errorResponses;
     private final ObjectMapper objectMapper;
     private final Set<String> unprotected;
 
-    public ApiKeyAuthFilter(SecurityProperties security, ObjectMapper objectMapper) {
+    public ApiKeyAuthFilter(SecurityProperties security, ErrorResponses errorResponses, ObjectMapper objectMapper) {
         this.security = security;
+        this.errorResponses = errorResponses;
         this.objectMapper = objectMapper;
         this.unprotected = new HashSet<>(security.unprotectedPaths());
     }
@@ -44,13 +46,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-            objectMapper.writeValue(response.getWriter(), new com.company.msisdn.dto.ErrorResponse(
-                    RequestIds.get(request),
-                    Instant.now(),
-                    401,
-                    "Unauthorized",
-                    "A valid API key is required",
-                    request.getRequestURI()));
+            objectMapper.writeValue(response.getWriter(), errorResponses.unauthorized(request));
             return;
         }
         filterChain.doFilter(request, response);

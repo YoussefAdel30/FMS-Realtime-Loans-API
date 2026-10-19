@@ -272,6 +272,8 @@ Startup validation rejects an empty API key when security is enabled, a blank Or
 | `api.nid.description` | NID validation text | 14-digit national id | string | yes |
 | `api.response.eligible-value` | Eligible token | `OK` | string | yes |
 | `api.response.ineligible-value` | Rejected token | `KO` | string | yes |
+| `api.response.ko-reason-prefix` | Text before the KO display names | `Anti-fraud : ` | string, may be empty | yes |
+| `api.response.ko-reason-separator` | Separator between KO display names | `, ` | string, may be empty | yes |
 | `api.response.include-request-id` | Omit field when false | `true` | boolean | yes |
 | `api.response.include-msisdn` | Omit field when false | `true` | boolean | yes |
 | `api.response.include-nid` | Omit field when false | `true` | boolean | yes |
@@ -279,8 +281,10 @@ Startup validation rejects an empty API key when security is enabled, a blank Or
 | `api.response.include-blacklist-version` | Omit field when false | `true` | boolean | yes |
 | `api.error.include-message` | Error detail policy | `validation-only` | `validation-only`, `always`, `never` | yes |
 | `api.error.include-path` | Include request path | `true` | boolean | yes |
+| `api.error.status-text.*` | JSON `error` field for 400, 401, 415, 503, and 500 | standard reason phrases | non-blank string | yes |
+| `api.error.messages.*` | JSON `message` field for each caller-visible case | see `application.yml` | non-blank string, with `{tokens}` | yes |
 
-`validation-only` returns the validation or readiness message for HTTP 400, 415, and 503, and a generic message for HTTP 500. `always` adds the exception simple name on HTTP 500. `never` uses a generic message for every status. Length 18 is the maximum because each half of the in-memory key is a positive signed `long`. The cache key is the pair `(msisdn, nid)`.
+`validation-only` returns the configured validation or readiness message for HTTP 400, 415, and 503, and `messages.internal-error` for HTTP 500. `always` uses `messages.internal-error-detail` on HTTP 500; `{exception}` is the exception class name. `never` uses the configured status text for 400, 415, and 503, and still uses `messages.internal-error` for HTTP 500. HTTP 401 always returns `messages.unauthorized`. Placeholders are `{min}`, `{max}`, `{field}`, `{detail}`, `{timeout}`, `{version}`, `{maxAge}`, and `{exception}`. Length 18 is the maximum because each half of the in-memory key is a positive signed `long`. The cache key is the pair `(msisdn, nid)`.
 
 ### Blacklist
 

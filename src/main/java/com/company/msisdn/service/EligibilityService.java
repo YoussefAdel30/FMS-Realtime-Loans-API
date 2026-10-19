@@ -81,7 +81,11 @@ public class EligibilityService {
         long mask = snapshot.lookup(Long.parseLong(msisdn), Long.parseLong(nid));
         boolean eligible = mask == 0L;
         String result = eligible ? api.response().eligibleValue() : api.response().ineligibleValue();
-        String reason = eligible ? "" : BitmaskCodec.formatKoReason(mask, snapshot.sources());
+        String reason = eligible ? "" : BitmaskCodec.formatKoReason(
+                mask,
+                snapshot.sources(),
+                api.response().koReasonPrefix(),
+                api.response().koReasonSeparator());
         record(requestId, requestTimestamp, started, msisdn, nid, result, mask, reason, snapshot.version(), 200);
         long elapsedMs = elapsedMillis(started);
         log.info("requestId={} msisdn={} nid={} result={} version={} status=200 processingMs={}",

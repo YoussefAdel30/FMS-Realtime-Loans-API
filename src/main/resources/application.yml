@@ -66,6 +66,8 @@ api:
   response:
     eligible-value: OK
     ineligible-value: KO
+    ko-reason-prefix: "Anti-fraud : "
+    ko-reason-separator: ", "
     include-request-id: true
     include-msisdn: true
     include-nid: true
@@ -74,6 +76,32 @@ api:
   error:
     include-message: validation-only
     include-path: true
+    status-text:
+      bad-request: "Bad Request"
+      unauthorized: "Unauthorized"
+      unsupported-media-type: "Unsupported Media Type"
+      service-unavailable: "Service Unavailable"
+      internal-server-error: "Internal Server Error"
+    messages:
+      msisdn-required: "msisdn is required"
+      msisdn-length: "msisdn length must be between {min} and {max}"
+      msisdn-pattern: "msisdn does not match the configured pattern"
+      nid-required: "nid is required"
+      nid-length: "nid length must be between {min} and {max}"
+      nid-pattern: "nid does not match the configured pattern"
+      invalid-json: "request body is not valid JSON"
+      validation-failed: "request validation failed"
+      field-invalid: "{field} {detail}"
+      unauthorized: "A valid API key is required"
+      unsupported-media-type: "Content-Type must be application/json"
+      internal-error: "An unexpected error occurred"
+      internal-error-detail: "{exception}"
+      audit-writer-down: "Audit writer is not running"
+      disk-space: "Free disk space is below monitoring.disk-space-threshold-bytes"
+      audit-queue-readiness: "Audit queue utilization exceeded the readiness threshold"
+      audit-rejected: "Audit pipeline did not accept the event within {timeout}ms"
+      blacklist-not-loaded: "Blacklist is not loaded"
+      blacklist-stale: "Blacklist snapshot {version} exceeded max age {maxAge}"
 
 blacklist:
   input-directory: ./data/blacklist/incoming

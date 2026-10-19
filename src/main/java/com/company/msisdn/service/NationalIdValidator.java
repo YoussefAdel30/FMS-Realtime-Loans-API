@@ -2,6 +2,7 @@ package com.company.msisdn.service;
 
 import com.company.msisdn.config.ApiProperties;
 import com.company.msisdn.exception.InvalidNationalIdException;
+import com.company.msisdn.util.MessageTemplates;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
@@ -18,15 +19,17 @@ public class NationalIdValidator {
 
     public void validate(String nid) {
         if (nid == null || nid.isBlank()) {
-            throw new InvalidNationalIdException("nid is required");
+            throw new InvalidNationalIdException(api.error().messages().nidRequired());
         }
         int length = nid.length();
         if (length < api.nid().minLength() || length > api.nid().maxLength()) {
-            throw new InvalidNationalIdException(
-                    "nid length must be between " + api.nid().minLength() + " and " + api.nid().maxLength());
+            throw new InvalidNationalIdException(MessageTemplates.apply(
+                    api.error().messages().nidLength(),
+                    "min", Integer.toString(api.nid().minLength()),
+                    "max", Integer.toString(api.nid().maxLength())));
         }
         if (!pattern.matcher(nid).matches()) {
-            throw new InvalidNationalIdException("nid does not match the configured pattern");
+            throw new InvalidNationalIdException(api.error().messages().nidPattern());
         }
     }
 }

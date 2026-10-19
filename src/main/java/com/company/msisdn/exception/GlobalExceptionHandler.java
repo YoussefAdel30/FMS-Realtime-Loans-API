@@ -2,10 +2,11 @@ package com.company.msisdn.exception;
 
 import com.company.msisdn.config.ApiProperties;
 import com.company.msisdn.config.ErrorMessageMode;
+import com.company.msisdn.config.ErrorResponses;
 import com.company.msisdn.dto.ErrorResponse;
 import com.company.msisdn.security.RequestIds;
+import com.company.msisdn.util.MessageTemplates;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -22,11 +23,11 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     private final ApiProperties api;
-    private final Clock clock;
+    private final ErrorResponses errorResponses;
 
-    public GlobalExceptionHandler(ApiProperties api, Clock clock) {
+    public GlobalExceptionHandler(ApiProperties api, ErrorResponses errorResponses) {
         this.api = api;
-        this.clock = clock;
+        this.errorResponses = errorResponses;
     }
 
     @ExceptionHandler({InvalidMsisdnException.class, InvalidNationalIdException.class})
@@ -38,19 +39,22 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
-                .map(error -> error.getField() + " " + error.getDefaultMessage())
-                .orElse("request validation failed");
+                .map(error -> MessageTemplates.apply(
+                        api.error().messages().fieldInvalid(),
+                        "field", error.getField() == null ? "" : error.getField(),
+                        "detail", error.getDefaultMessage()))
+                .orElse(api.error().messages().validationFailed());
         return error(HttpStatus.BAD_REQUEST, message, request, false);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> unreadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
-        return error(HttpStatus.BAD_REQUEST, "request body is not valid JSON", request, false);
+        return error(HttpStatus.BAD_REQUEST, api.error().messages().invalidJson(), request, false);
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ErrorResponse> unsupported(HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
-        return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json", request, false);
+        return error(HttpStatus.UNSUPPORTED_MEDIA_TYPE, api.error().messages().unsupportedMediaType(), request, false);
     }
 
     @ExceptionHandler({NotReadyException.class, AuditRejectedException.class})
@@ -63,33 +67,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> unexpected(Exception ex, HttpServletRequest request) {
         log.error("requestId={} unexpected failure", RequestIds.get(request), ex);
         String message = api.error().includeMessage() == ErrorMessageMode.ALWAYS
-                ? ex.getClass().getSimpleName()
-                : "An unexpected error occurred";
+                ? MessageTemplates.apply(api.error().messages().internalErrorDetail(), "exception", ex.getClass().getSimpleName())
+                : api.error().messages().internalError();
         return error(HttpStatus.INTERNAL_SERVER_ERROR, message, request, true);
     }
 
     private ResponseEntity<ErrorResponse> error(HttpStatus status, String message, HttpServletRequest request, boolean alwaysGeneric) {
-        ErrorMessageMode mode = api.error().includeMessage();
-        boolean includeDetail = switch (mode) {
-            case NEVER -> false;
-            case ALWAYS -> true;
-            case VALIDATION_ONLY -> status == HttpStatus.BAD_REQUEST
-                    || status == HttpStatus.SERVICE_UNAVAILABLE
-                    || status == HttpStatus.UNSUPPORTED_MEDIA_TYPE;
-        };
-        if (alwaysGeneric && mode != ErrorMessageMode.ALWAYS) {
-            includeDetail = false;
-        }
-        String visible = includeDetail ? message : (status == HttpStatus.INTERNAL_SERVER_ERROR
-                ? "An unexpected error occurred"
-                : status.getReasonPhrase());
-        ErrorResponse body = new ErrorResponse(
-                RequestIds.get(request),
-                clock.instant(),
-                status.value(),
-                status.getReasonPhrase(),
-                visible,
-                api.error().includePath() ? request.getRequestURI() : null);
-        return ResponseEntity.status(status).body(body);
+        return ResponseEntity.status(status).body(errorResponses.body(status, message, request, alwaysGeneric));
     }
 }

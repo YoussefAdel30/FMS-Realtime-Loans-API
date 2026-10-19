@@ -2,6 +2,7 @@ package com.company.msisdn.monitoring;
 
 import com.company.msisdn.audit.AuditQueue;
 import com.company.msisdn.audit.AuditWorkers;
+import com.company.msisdn.config.ApiProperties;
 import com.company.msisdn.config.AuditProperties;
 import com.company.msisdn.config.MonitoringProperties;
 import com.company.msisdn.exception.NotReadyException;
@@ -16,6 +17,7 @@ public class TrafficGate {
     private final AuditProperties auditProperties;
     private final MonitoringProperties monitoring;
     private final DiskSpaceGuard diskSpaceGuard;
+    private final ApiProperties api;
 
     public TrafficGate(
             ReadinessGate readinessGate,
@@ -23,7 +25,8 @@ public class TrafficGate {
             AuditQueue auditQueue,
             AuditProperties auditProperties,
             MonitoringProperties monitoring,
-            DiskSpaceGuard diskSpaceGuard
+            DiskSpaceGuard diskSpaceGuard,
+            ApiProperties api
     ) {
         this.readinessGate = readinessGate;
         this.auditWorkers = auditWorkers;
@@ -31,17 +34,18 @@ public class TrafficGate {
         this.auditProperties = auditProperties;
         this.monitoring = monitoring;
         this.diskSpaceGuard = diskSpaceGuard;
+        this.api = api;
     }
 
     public void requireAccepting() {
         if (!auditWorkers.healthy()) {
-            throw new NotReadyException("Audit writer is not running");
+            throw new NotReadyException(api.error().messages().auditWriterDown());
         }
         if (diskSpaceGuard.isLow()) {
-            throw new NotReadyException("Free disk space is below monitoring.disk-space-threshold-bytes");
+            throw new NotReadyException(api.error().messages().diskSpace());
         }
         if (auditProperties.enabled() && auditQueue.utilization() >= monitoring.auditQueueReadinessThreshold()) {
-            throw new NotReadyException("Audit queue utilization exceeded the readiness threshold");
+            throw new NotReadyException(api.error().messages().auditQueueReadiness());
         }
         if (!readinessGate.isReady()) {
             throw new NotReadyException(readinessGate.reason());

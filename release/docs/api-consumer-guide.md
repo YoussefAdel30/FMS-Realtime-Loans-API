@@ -342,6 +342,10 @@ MSISDN,NID,Vishing,Suspicious_IMEI,Financial_Fraud
 
 Column 1 is the MSISDN. Column 2 is the NID. Every following column is a flag, `0` or `1`. The in-memory cache holds the whole file, keyed by the pair. Bit 0 is the first flag column.
 
+## Message text
+
+The sentences in this guide are the defaults shipped in `application.yml`. Operations can change every status phrase and every `message` value under `api.error.status-text` and `api.error.messages`, and can change the KO prefix under `api.response.ko-reason-prefix`. Callers should branch on the HTTP status and on `result`. Do not branch on the exact wording of `message` or `reason`.
+
 ## Caller rules
 
 - Send both `msisdn` and `nid` on every check.

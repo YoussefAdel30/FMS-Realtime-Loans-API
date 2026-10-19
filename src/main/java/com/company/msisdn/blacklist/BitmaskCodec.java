@@ -47,7 +47,13 @@ public final class BitmaskCodec {
     }
 
     public static String formatKoReason(long mask, List<SourceDefinition> sources) {
-        return "Anti-fraud : " + String.join(", ", activeDisplayNames(mask, sources));
+        return formatKoReason(mask, sources, "Anti-fraud : ", ", ");
+    }
+
+    public static String formatKoReason(long mask, List<SourceDefinition> sources, String prefix, String separator) {
+        String lead = prefix == null ? "" : prefix;
+        String between = separator == null ? "" : separator;
+        return lead + String.join(between, activeDisplayNames(mask, sources));
     }
 
     private static void checkIndex(int index) {

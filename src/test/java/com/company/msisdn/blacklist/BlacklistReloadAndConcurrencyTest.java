@@ -117,7 +117,7 @@ class BlacklistReloadAndConcurrencyTest {
         Files.createDirectories(root.resolve("snapshot"));
         BlacklistProperties properties = ConfigFixtures.blacklist(root, DuplicatePolicy.MERGE_OR);
         store = new BlacklistStore();
-        gate = new ReadinessGate();
+        gate = new ReadinessGate(ConfigFixtures.api());
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         return new BlacklistReloadService(
@@ -131,7 +131,8 @@ class BlacklistReloadAndConcurrencyTest {
                 gate,
                 mapper,
                 Clock.systemUTC(),
-                new SimpleMeterRegistry());
+                new SimpleMeterRegistry(),
+                ConfigFixtures.api());
     }
 
     private void publish(Path root, String version, String csv) throws Exception {

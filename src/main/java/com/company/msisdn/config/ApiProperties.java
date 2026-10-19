@@ -39,6 +39,8 @@ public record ApiProperties(
     public record Response(
             @NotBlank String eligibleValue,
             @NotBlank String ineligibleValue,
+            @NotNull String koReasonPrefix,
+            @NotNull String koReasonSeparator,
             boolean includeRequestId,
             boolean includeMsisdn,
             boolean includeNid,
@@ -49,7 +51,41 @@ public record ApiProperties(
 
     public record Error(
             @NotNull ErrorMessageMode includeMessage,
-            boolean includePath
+            boolean includePath,
+            @Valid @NotNull StatusText statusText,
+            @Valid @NotNull Messages messages
+    ) {
+    }
+
+    public record StatusText(
+            @NotBlank String badRequest,
+            @NotBlank String unauthorized,
+            @NotBlank String unsupportedMediaType,
+            @NotBlank String serviceUnavailable,
+            @NotBlank String internalServerError
+    ) {
+    }
+
+    public record Messages(
+            @NotBlank String msisdnRequired,
+            @NotBlank String msisdnLength,
+            @NotBlank String msisdnPattern,
+            @NotBlank String nidRequired,
+            @NotBlank String nidLength,
+            @NotBlank String nidPattern,
+            @NotBlank String invalidJson,
+            @NotBlank String validationFailed,
+            @NotBlank String fieldInvalid,
+            @NotBlank String unauthorized,
+            @NotBlank String unsupportedMediaType,
+            @NotBlank String internalError,
+            @NotBlank String internalErrorDetail,
+            @NotBlank String auditWriterDown,
+            @NotBlank String diskSpace,
+            @NotBlank String auditQueueReadiness,
+            @NotBlank String auditRejected,
+            @NotBlank String blacklistNotLoaded,
+            @NotBlank String blacklistStale
     ) {
     }
 }
