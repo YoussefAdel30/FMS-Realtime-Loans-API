@@ -13,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -81,9 +80,10 @@ class AuditPipelineTest {
                 Instant.parse("2026-10-15T00:00:00Z"),
                 Instant.parse("2026-10-15T00:00:00.010Z"),
                 "201066257228",
+                "29901011234567",
                 "KO",
                 "5",
-                List.of("Anti-Fraud (Vishing)", "Anti-Fraud (Financial Fraud)"),
+                "Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)",
                 "20261015",
                 4,
                 200,

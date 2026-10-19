@@ -78,7 +78,7 @@ curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
 curl -sS -D - http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' \
   -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"201055555555"}'
+  -d '{"msisdn":"201055555555","nid":"29901011234560"}'
 ```
 
 Omit the API key header when `security.enabled` is false.
@@ -86,7 +86,7 @@ Omit the API key header when `security.enabled` is false.
 **Expected response.** HTTP 200 and a body shaped like:
 
 ```json
-{"requestId":"req-...","msisdn":"201055555555","result":"OK","reasons":[],"blacklistVersion":"20261015"}
+{"requestId":"req-...","msisdn":"201055555555","nid":"29901011234560","result":"OK","reason":"","blacklistVersion":"20261015"}
 ```
 
 **Verification.** `X-Request-Id` equals `requestId`.
@@ -97,7 +97,7 @@ Omit the API key header when `security.enabled` is false.
 
 **Objective.** One active flag returns `KO` and one reason.
 
-**Prerequisites.** Sample row `201098765432,1,0,0` is loaded, or use `201012345678` when only `Suspicious_IMEI` is set.
+**Prerequisites.** Sample row `201098765432,27703031234569,1,0,0` is loaded. The same MSISDN with any other NID is a different key and is `OK`.
 
 **Command.**
 
@@ -105,14 +105,14 @@ Omit the API key header when `security.enabled` is false.
 curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' \
   -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"201098765432"}'
+  -d '{"msisdn":"201098765432","nid":"27703031234569"}'
 ```
 
-**Expected response.** HTTP 200, `"result":"KO"`, and `reasons` containing only `Anti-Fraud (Vishing)`.
+**Expected response.** HTTP 200, `"result":"KO"`, and `"reason":"Anti-fraud : Anti-Fraud (Vishing)"`.
 
-**Verification.** Compare the reason with `blacklist.sources.display-names.Vishing`.
+**Verification.** Compare the text after `Anti-fraud : ` with `blacklist.sources.display-names.Vishing`. Repeat the call with `"nid":"25505051234561"` and confirm `OK`.
 
-**Pass.** Exactly one reason. **Fail.** `OK`, or extra reasons.
+**Pass.** Exactly that reason string. **Fail.** `OK` for the listed pair, or extra display names.
 
 ## Test 6 — Multiple rejection reasons
 
@@ -124,14 +124,14 @@ curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
 curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' \
   -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"201066257228"}'
+  -d '{"msisdn":"201066257228","nid":"29901011234567"}'
 ```
 
-**Expected response.** HTTP 200, `KO`, and both `Anti-Fraud (Vishing)` and `Anti-Fraud (Financial Fraud)` when the sample row `201066257228,1,0,1` is loaded.
+**Expected response.** HTTP 200, `KO`, and `"reason":"Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)"` when the sample row `201066257228,29901011234567,1,0,1` is loaded.
 
-**Verification.** The status payload `sourceCount` matches the CSV header.
+**Verification.** The status payload `sourceCount` matches the flag columns. Vishing comes before Financial Fraud.
 
-**Pass.** Both reasons, Vishing before Financial Fraud. **Fail.** A missing or reordered reason.
+**Pass.** That exact reason string. **Fail.** A missing or reordered display name.
 
 ## Test 7 — Invalid MSISDN
 
@@ -142,16 +142,19 @@ curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
 ```bash
 curl -sS -o /tmp/bad1.json -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"123"}'
+  -d '{"msisdn":"123","nid":"29901011234567"}'
 curl -sS -o /tmp/bad2.json -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"2010ABCDEFGH"}'
+  -d '{"msisdn":"2010ABCDEFGH","nid":"29901011234567"}'
+curl -sS -o /tmp/bad-nid.json -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555555","nid":"123"}'
 curl -sS -o /tmp/bad3.json -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":""}'
+  -d '{"msisdn":"","nid":"29901011234567"}'
 ```
 
-**Expected response.** `400` three times. The body contains the request id and a validation message. The full MSISDN is not required in the message.
+**Expected response.** `400` four times. The body contains the request id and a validation message. The full MSISDN is not required in the message.
 
 **Verification.** Application log shows a masked value or `***`, not the raw invalid string when masking applies.
 
@@ -169,7 +172,7 @@ curl -sS -o /tmp/bad3.json -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/elig
 grep -R "201066257228" /opt/msisdn-api/logs/audit/active /opt/msisdn-api/logs/audit/completed
 ```
 
-**Expected response.** A single-line JSON object with `requestId`, `msisdn`, `result`, `reasons`, `reasonMask`, `blacklistVersion`, `requestTimestamp`, and `responseTimestamp`.
+**Expected response.** A single-line JSON object with `requestId`, `msisdn`, `nid`, `result`, `reason`, `reasonMask`, `blacklistVersion`, `requestTimestamp`, and `responseTimestamp`. On `KO`, `reason` starts with `Anti-fraud : `.
 
 **Verification.** `reasonMask` for Vishing plus Financial Fraud (bits 0 and 2) is the decimal string `5`.
 
@@ -184,7 +187,7 @@ grep -R "201066257228" /opt/msisdn-api/logs/audit/active /opt/msisdn-api/logs/au
 **Command.** Run as `MSISDN_API`:
 
 ```sql
-SELECT request_id, msisdn, result, reason_mask, reasons, blacklist_version, http_status
+SELECT request_id, msisdn, nid, result, reason_mask, reasons, blacklist_version, http_status
   FROM FMSPRD6.MSISDN_ELIGIBILITY_AUDIT
  WHERE request_id = '&request_id';
 ```
@@ -206,7 +209,7 @@ ls -l /opt/msisdn-api/data/export
 head -n 5 /opt/msisdn-api/data/export/eligibility-audit-*.csv
 ```
 
-**Expected response.** A `.csv` file with a header and the same request id, MSISDN, result, and reasons. No `.part` file remains for a finished export.
+**Expected response.** A `.csv` file with a header and the same request id, MSISDN, NID, result, and reason. No `.part` file remains for a finished export.
 
 **Verification.** Row count of the CSV, excluding the header, equals the number of JSONL lines in the segment that produced it.
 
@@ -222,8 +225,8 @@ head -n 5 /opt/msisdn-api/data/export/eligibility-audit-*.csv
 
 ```bash
 cat > /tmp/blacklist-20261016.csv <<'EOF'
-MSISDN,Vishing,Suspicious_IMEI,Financial_Fraud
-201066257228,0,0,0
+MSISDN,NID,Vishing,Suspicious_IMEI,Financial_Fraud
+201066257228,29901011234567,0,0,0
 EOF
 cp /tmp/blacklist-20261016.csv /opt/msisdn-api/data/blacklist/incoming/
 # The ready marker is created only after the CSV copy has finished.
@@ -231,7 +234,7 @@ touch /opt/msisdn-api/data/blacklist/incoming/blacklist-20261016.csv.ready
 sleep 70
 curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"201066257228"}'
+  -d '{"msisdn":"201066257228","nid":"29901011234567"}'
 ```
 
 The sleep covers the default 30 second reload interval and the stability observation. Set `blacklist.stability.enabled: false` in a lab if you need the next scan to load immediately.
@@ -249,7 +252,7 @@ The sleep covers the default 30 second reload interval and the stability observa
 **Command.**
 
 ```bash
-printf 'MSISDN,Vishing\nNOT-A-NUMBER,1\n' > /opt/msisdn-api/data/blacklist/incoming/blacklist-20261017.csv
+printf 'MSISDN,NID,Vishing\nNOT-A-NUMBER,29901011234567,1\n' > /opt/msisdn-api/data/blacklist/incoming/blacklist-20261017.csv
 touch /opt/msisdn-api/data/blacklist/incoming/blacklist-20261017.csv.ready
 sleep 70
 scripts/status.sh
@@ -293,7 +296,7 @@ sed -i 's|^ORACLE_JDBC_URL=.*|ORACLE_JDBC_URL=jdbc:oracle:thin:@//127.0.0.1:1/UN
 for i in 1 2 3; do
   curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
     -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
-    -d '{"msisdn":"201055555555"}'
+    -d '{"msisdn":"201055555555","nid":"29901011234560"}'
 done
 ls "$HOME/msisdn-api/logs/audit/completed"
 cp /tmp/msisdn-api.env.bak "$HOME/msisdn-api/msisdn-api.env"
@@ -320,7 +323,7 @@ An administrator can instead block port 1521 with `firewall-cmd`. `FMSUser` cann
 for i in $(seq 1 100); do
   curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
     -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
-    -d '{"msisdn":"201055555555"}'
+    -d '{"msisdn":"201055555555","nid":"29901011234560"}'
 done
 ```
 
@@ -407,7 +410,7 @@ Wait up to three minutes if cron has not fired yet.
 ```bash
 seq 1 50 | xargs -P 10 -I{} curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"201066257228"}' > /tmp/concurrent.out
+  -d '{"msisdn":"201066257228","nid":"29901011234567"}' > /tmp/concurrent.out
 grep -c '"result":"KO"' /tmp/concurrent.out
 grep -c 'Exception' /opt/msisdn-api/logs/application/application.log || true
 ```

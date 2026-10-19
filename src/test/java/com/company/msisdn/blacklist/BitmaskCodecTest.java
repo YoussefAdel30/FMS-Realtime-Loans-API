@@ -39,6 +39,8 @@ class BitmaskCodecTest {
         long mask = BitmaskCodec.setBit(BitmaskCodec.setBit(0L, 0), 2);
         assertThat(BitmaskCodec.activeDisplayNames(mask, sources))
                 .containsExactly("Anti-Fraud (Vishing)", "Anti-Fraud (Financial Fraud)");
+        assertThat(BitmaskCodec.formatKoReason(mask, sources))
+                .isEqualTo("Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)");
         assertThat(BitmaskCodec.activeDisplayNames(0L, sources)).isEmpty();
     }
 

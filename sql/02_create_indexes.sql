@@ -20,6 +20,10 @@ PROMPT Creating lookup index for a single MSISDN history
 CREATE INDEX &schema_owner..IDX_MSISDN_ELIG_MSISDN_TS
     ON &schema_owner..MSISDN_ELIGIBILITY_AUDIT (MSISDN, REQUEST_TIMESTAMP);
 
+PROMPT Creating lookup index for one MSISDN and NID pair
+CREATE INDEX &schema_owner..IDX_MSISDN_ELIG_PAIR_TS
+    ON &schema_owner..MSISDN_ELIGIBILITY_AUDIT (MSISDN, NID, REQUEST_TIMESTAMP);
+
 PROMPT Creating time index for volume and recent-activity queries
 -- Supports latest requests, per-minute counts, per-hour counts, and daily volume.
 -- RESULT is not indexed. OK/KO counts in a time window use this index and then

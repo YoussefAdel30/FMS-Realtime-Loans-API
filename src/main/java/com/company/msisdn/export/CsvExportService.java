@@ -35,8 +35,8 @@ public class CsvExportService {
     private static final Logger log = LoggerFactory.getLogger(CsvExportService.class);
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmssSSS").withZone(java.time.ZoneOffset.UTC);
     private static final String[] HEADERS = {
-            "requestId", "requestTimestamp", "responseTimestamp", "msisdn", "result", "reasonMask",
-            "reasons", "blacklistVersion", "processingTimeMs", "httpStatus", "apiInstance"
+            "requestId", "requestTimestamp", "responseTimestamp", "msisdn", "nid", "result", "reasonMask",
+            "reason", "blacklistVersion", "processingTimeMs", "httpStatus", "apiInstance"
     };
 
     private final CsvExportProperties properties;
@@ -377,15 +377,15 @@ public class CsvExportService {
         }
 
         private void write(AuditEvent event) {
-            String reasons = event.reasons() == null ? "" : String.join("|", event.reasons());
             writer.writeRow(
                     protect(event.requestId()),
                     event.requestTimestamp().toString(),
                     event.responseTimestamp().toString(),
                     protect(event.msisdn()),
+                    protect(event.nid()),
                     protect(event.result()),
                     protect(event.reasonMask()),
-                    protect(reasons),
+                    protect(event.reason()),
                     protect(event.blacklistVersion()),
                     Long.toString(event.processingTimeMs()),
                     Integer.toString(event.httpStatus()),

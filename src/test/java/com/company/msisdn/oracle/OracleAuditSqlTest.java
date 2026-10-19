@@ -17,6 +17,7 @@ class OracleAuditSqlTest {
         assertThat(sql.insertSql()).contains("INSERT INTO FMSPRD6.MSISDN_ELIGIBILITY_AUDIT");
         assertThat(sql.insertSql()).contains("FROM DUAL");
         assertThat(sql.insertSql()).contains("WHERE NOT EXISTS");
+        assertThat(sql.insertSql()).contains("NID");
         assertThat(sql.insertSql()).contains("EXISTING_ROW.REQUEST_ID = ?");
         assertThat(sql.insertSql()).doesNotContain("${");
     }

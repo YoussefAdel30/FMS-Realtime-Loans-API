@@ -1,14 +1,13 @@
 package com.company.msisdn.blacklist;
 
-import com.company.msisdn.config.ApiProperties;
 import com.company.msisdn.config.BlacklistProperties;
 import com.company.msisdn.exception.BlacklistValidationException;
 import com.company.msisdn.exception.FatalBlacklistException;
 import com.company.msisdn.service.MsisdnValidator;
+import com.company.msisdn.service.NationalIdValidator;
 import com.company.msisdn.util.MsisdnMasker;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -32,11 +31,18 @@ public class CsvBlacklistLoader {
 
     private final BlacklistProperties properties;
     private final MsisdnValidator msisdnValidator;
+    private final NationalIdValidator nationalIdValidator;
     private final Clock clock;
 
-    public CsvBlacklistLoader(BlacklistProperties properties, MsisdnValidator msisdnValidator, Clock clock) {
+    public CsvBlacklistLoader(
+            BlacklistProperties properties,
+            MsisdnValidator msisdnValidator,
+            NationalIdValidator nationalIdValidator,
+            Clock clock
+    ) {
         this.properties = properties;
         this.msisdnValidator = msisdnValidator;
+        this.nationalIdValidator = nationalIdValidator;
         this.clock = clock;
     }
 
@@ -44,10 +50,9 @@ public class CsvBlacklistLoader {
             throws IOException {
         Charset charset = Charset.forName(properties.encoding());
         CsvParser parser = new CsvParser(parserSettings());
-        Long2LongOpenHashMap map = new Long2LongOpenHashMap(
+        CompositeBlacklistMap map = new CompositeBlacklistMap(
                 properties.memory().initialCapacity(),
                 properties.memory().loadFactor());
-        map.defaultReturnValue(0L);
 
         long rowsRead = 0;
         long invalidRows = 0;
@@ -76,7 +81,7 @@ public class CsvBlacklistLoader {
                 }
                 if (map.size() > properties.validation().maxRecordCount()) {
                     throw new BlacklistValidationException(
-                            "unique MSISDN count exceeds blacklist.validation.max-record-count="
+                            "unique MSISDN and NID pair count exceeds blacklist.validation.max-record-count="
                                     + properties.validation().maxRecordCount());
                 }
             }
@@ -86,7 +91,7 @@ public class CsvBlacklistLoader {
 
         if (map.size() < properties.validation().minRecordCount()) {
             throw new BlacklistValidationException(
-                    "unique MSISDN count " + map.size() + " is below blacklist.validation.min-record-count="
+                    "unique MSISDN and NID pair count " + map.size() + " is below blacklist.validation.min-record-count="
                             + properties.validation().minRecordCount());
         }
 
@@ -105,25 +110,28 @@ public class CsvBlacklistLoader {
                 bytes);
     }
 
-    private void acceptRow(Long2LongOpenHashMap map, List<SourceDefinition> sources, String[] row) {
-        if (row.length != sources.size() + 1) {
+    private void acceptRow(CompositeBlacklistMap map, List<SourceDefinition> sources, String[] row) {
+        if (row.length != sources.size() + 2) {
             throw new BlacklistValidationException(
-                    "expected " + (sources.size() + 1) + " columns but found " + row.length);
+                    "expected " + (sources.size() + 2) + " columns but found " + row.length);
         }
         String msisdnText = row[0] == null ? "" : row[0].trim();
+        String nidText = row[1] == null ? "" : row[1].trim();
         if (properties.validation().applyApiMsisdnRules()) {
             try {
                 msisdnValidator.validate(msisdnText);
+                nationalIdValidator.validate(nidText);
             } catch (RuntimeException ex) {
                 throw new BlacklistValidationException(ex.getMessage());
             }
-        } else if (!msisdnText.chars().allMatch(Character::isDigit) || msisdnText.length() > 18 || msisdnText.isEmpty()) {
-            throw new BlacklistValidationException("MSISDN must be 1 to 18 digits");
+        } else if (!digits(msisdnText) || !digits(nidText)) {
+            throw new BlacklistValidationException("MSISDN and NID must each be 1 to 18 digits");
         }
         long msisdn = Long.parseLong(msisdnText);
+        long nid = Long.parseLong(nidText);
         long mask = 0L;
         for (int index = 0; index < sources.size(); index++) {
-            String flag = row[index + 1] == null ? "" : row[index + 1].trim();
+            String flag = row[index + 2] == null ? "" : row[index + 2].trim();
             if ("1".equals(flag)) {
                 mask = BitmaskCodec.setBit(mask, index);
             } else if (!"0".equals(flag)) {
@@ -131,26 +139,31 @@ public class CsvBlacklistLoader {
                         "flag for " + sources.get(index).columnName() + " must be 0 or 1");
             }
         }
-        applyDuplicatePolicy(map, msisdn, mask);
+        applyDuplicatePolicy(map, msisdn, nid, mask);
     }
 
-    private void applyDuplicatePolicy(Long2LongOpenHashMap map, long msisdn, long mask) {
-        boolean present = map.containsKey(msisdn);
+    private static boolean digits(String value) {
+        return !value.isEmpty() && value.length() <= 18 && value.chars().allMatch(Character::isDigit);
+    }
+
+    private void applyDuplicatePolicy(CompositeBlacklistMap map, long msisdn, long nid, long mask) {
+        boolean present = map.contains(msisdn, nid);
         switch (properties.duplicatePolicy()) {
-            case MERGE_OR -> map.put(msisdn, (present ? map.get(msisdn) : 0L) | mask);
+            case MERGE_OR -> map.put(msisdn, nid, (present ? map.get(msisdn, nid) : 0L) | mask);
             case FIRST_WINS -> {
                 if (!present) {
-                    map.put(msisdn, mask);
+                    map.put(msisdn, nid, mask);
                 }
             }
-            case LAST_WINS -> map.put(msisdn, mask);
+            case LAST_WINS -> map.put(msisdn, nid, mask);
             case REJECT -> {
                 if (present) {
                     throw new FatalBlacklistException(
                             "duplicate MSISDN " + MsisdnMasker.mask(Long.toString(msisdn))
+                                    + " and NID " + MsisdnMasker.mask(Long.toString(nid))
                                     + " and duplicate-policy is reject");
                 }
-                map.put(msisdn, mask);
+                map.put(msisdn, nid, mask);
             }
             default -> throw new IllegalStateException("Unsupported duplicate policy " + properties.duplicatePolicy());
         }
@@ -168,16 +181,24 @@ public class CsvBlacklistLoader {
             throw new BlacklistValidationException(
                     "first column must be " + properties.msisdnColumn() + " but was " + msisdnHeader);
         }
-        if (headers.length - 1 > BitmaskCodec.MAX_SOURCES) {
-            throw new BlacklistValidationException(
-                    "CSV declares " + (headers.length - 1) + " sources; the maximum is " + BitmaskCodec.MAX_SOURCES);
+        if (headers.length < 2) {
+            throw new BlacklistValidationException("CSV must declare an NID column after MSISDN");
         }
-        if (headers.length == 1) {
+        String nidHeader = headers[1] == null ? "" : headers[1].trim();
+        if (!columnEquals(nidHeader, properties.nidColumn())) {
+            throw new BlacklistValidationException(
+                    "second column must be " + properties.nidColumn() + " but was " + nidHeader);
+        }
+        if (headers.length - 2 > BitmaskCodec.MAX_SOURCES) {
+            throw new BlacklistValidationException(
+                    "CSV declares " + (headers.length - 2) + " sources; the maximum is " + BitmaskCodec.MAX_SOURCES);
+        }
+        if (headers.length == 2) {
             throw new BlacklistValidationException("CSV must declare at least one blacklist source column");
         }
         Set<String> seen = new HashSet<>();
         List<SourceDefinition> sources = new ArrayList<>();
-        for (int index = 1; index < headers.length; index++) {
+        for (int index = 2; index < headers.length; index++) {
             String column = headers[index] == null ? "" : headers[index].trim();
             if (column.isBlank()) {
                 throw new BlacklistValidationException("source column " + index + " is blank");
@@ -191,7 +212,7 @@ public class CsvBlacklistLoader {
                 throw new BlacklistValidationException(
                         "source column " + column + " has no entry in blacklist.sources.display-names");
             }
-            sources.add(new SourceDefinition(index - 1, column, display));
+            sources.add(new SourceDefinition(index - 2, column, display));
         }
         return List.copyOf(sources);
     }
@@ -222,7 +243,7 @@ public class CsvBlacklistLoader {
         settings.setLineSeparatorDetectionEnabled(true);
         settings.setSkipEmptyLines(true);
         settings.setMaxCharsPerColumn(256);
-        settings.setMaxColumns(BitmaskCodec.MAX_SOURCES + 2);
+        settings.setMaxColumns(BitmaskCodec.MAX_SOURCES + 3);
         settings.setReadInputOnSeparateThread(false);
         settings.getFormat().setDelimiter(properties.delimiter().charAt(0));
         settings.getFormat().setQuote('"');

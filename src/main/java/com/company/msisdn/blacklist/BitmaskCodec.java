@@ -46,6 +46,10 @@ public final class BitmaskCodec {
         return List.copyOf(names);
     }
 
+    public static String formatKoReason(long mask, List<SourceDefinition> sources) {
+        return "Anti-fraud : " + String.join(", ", activeDisplayNames(mask, sources));
+    }
+
     private static void checkIndex(int index) {
         if (index < 0 || index >= MAX_SOURCES) {
             throw new IllegalArgumentException("source bit index must be between 0 and 63");

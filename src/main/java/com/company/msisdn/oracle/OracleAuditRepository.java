@@ -130,14 +130,15 @@ public class OracleAuditRepository {
         ps.setTimestamp(2, Timestamp.from(event.requestTimestamp()));
         ps.setTimestamp(3, Timestamp.from(event.responseTimestamp()));
         ps.setString(4, limit(event.msisdn(), 32));
-        ps.setString(5, limit(event.result(), 16));
-        ps.setString(6, BitmaskCodec.toHex(Long.parseUnsignedLong(event.reasonMask())));
-        ps.setString(7, limit(String.join(" | ", event.reasons()), REASONS_LIMIT));
-        ps.setString(8, limit(event.blacklistVersion(), 64));
-        ps.setLong(9, Math.max(0L, event.processingTimeMs()));
-        ps.setInt(10, event.httpStatus());
-        ps.setString(11, limit(event.apiInstance(), 128));
-        ps.setString(12, limit(event.requestId(), 64));
+        ps.setString(5, limit(event.nid(), 32));
+        ps.setString(6, limit(event.result(), 16));
+        ps.setString(7, BitmaskCodec.toHex(Long.parseUnsignedLong(event.reasonMask())));
+        ps.setString(8, limit(event.reason(), REASONS_LIMIT));
+        ps.setString(9, limit(event.blacklistVersion(), 64));
+        ps.setLong(10, Math.max(0L, event.processingTimeMs()));
+        ps.setInt(11, event.httpStatus());
+        ps.setString(12, limit(event.apiInstance(), 128));
+        ps.setString(13, limit(event.requestId(), 64));
     }
 
     private void quarantine(AuditEvent event, Exception ex) {

@@ -19,6 +19,7 @@ CREATE TABLE &schema_owner..MSISDN_ELIGIBILITY_AUDIT (
     REQUEST_TIMESTAMP   TIMESTAMP(3)         NOT NULL,
     RESPONSE_TIMESTAMP  TIMESTAMP(3)         NOT NULL,
     MSISDN              VARCHAR2(32 CHAR)    NOT NULL,
+    NID                 VARCHAR2(32 CHAR)    NOT NULL,
     RESULT              VARCHAR2(16 CHAR)    NOT NULL,
     REASON_MASK         VARCHAR2(16 CHAR)    NOT NULL,
     REASONS             VARCHAR2(4000 CHAR),
@@ -44,12 +45,14 @@ COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.RESPONSE_TIMESTAMP IS
     'UTC timestamp when the API finished the decision.';
 COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.MSISDN IS
     'Subscriber number as text. Never store it as NUMBER.';
+COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.NID IS
+    'National id as text. Stored with the MSISDN as the blacklist lookup pair.';
 COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.RESULT IS
     'Eligibility result configured by the API, normally OK or KO. INVALID, UNAVAILABLE, and ERROR are also written.';
 COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.REASON_MASK IS
     'Unsigned 64-bit source bitmask as 16 uppercase hexadecimal characters. Bit 63 is the first character''s high bit.';
 COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.REASONS IS
-    'Human-readable active sources separated by '' | ''.';
+    'KO reason text, starting with ''Anti-fraud : ''. Empty when the decision is not KO.';
 COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.BLACKLIST_VERSION IS
     'Version parsed from the blacklist file name, normally YYYYMMDD.';
 COMMENT ON COLUMN &schema_owner..MSISDN_ELIGIBILITY_AUDIT.PROCESSING_TIME_MS IS

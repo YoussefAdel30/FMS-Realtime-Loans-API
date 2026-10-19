@@ -162,11 +162,13 @@ mkdir -p release/config release/sql release/scripts release/deploy release/tests
 cp target/msisdn-api.jar release/msisdn-api.jar
 cp config/application.yml release/application.yml
 cp docs.md README.md release/
+mkdir -p release/docs
+cp docs/api-consumer-guide.md release/docs/
 cp config/log4j2-spring.xml release/config/
 cp sql/* release/sql/
 cp scripts/*.sh release/scripts/
 cp deploy/* release/deploy/
-cp tests/manual-testing.md release/tests/
+cp tests/manual-testing.md tests/load-test.js release/tests/
 chmod 755 release/scripts/*.sh
 ```
 
@@ -264,16 +266,21 @@ Startup validation rejects an empty API key when security is enabled, a blank Or
 | `api.msisdn.min-length` | Minimum length | `12` | 1–18 | yes |
 | `api.msisdn.max-length` | Maximum length | `12` | 1–18, at least min | yes |
 | `api.msisdn.description` | Validation error text | Egyptian 12-digit text | string | yes |
+| `api.nid.pattern` | Full-match national-id regex | `^[0-9]{14}$` | Java regex | yes |
+| `api.nid.min-length` | Minimum NID length | `14` | 1–18 | yes |
+| `api.nid.max-length` | Maximum NID length | `14` | 1–18, at least min | yes |
+| `api.nid.description` | NID validation text | 14-digit national id | string | yes |
 | `api.response.eligible-value` | Eligible token | `OK` | string | yes |
 | `api.response.ineligible-value` | Rejected token | `KO` | string | yes |
 | `api.response.include-request-id` | Omit field when false | `true` | boolean | yes |
 | `api.response.include-msisdn` | Omit field when false | `true` | boolean | yes |
-| `api.response.include-reasons` | Omit field when false | `true` | boolean | yes |
+| `api.response.include-nid` | Omit field when false | `true` | boolean | yes |
+| `api.response.include-reasons` | Omit the `reason` string when false | `true` | boolean | yes |
 | `api.response.include-blacklist-version` | Omit field when false | `true` | boolean | yes |
 | `api.error.include-message` | Error detail policy | `validation-only` | `validation-only`, `always`, `never` | yes |
 | `api.error.include-path` | Include request path | `true` | boolean | yes |
 
-`validation-only` returns the validation or readiness message for HTTP 400, 415, and 503, and a generic message for HTTP 500. `always` adds the exception simple name on HTTP 500. `never` uses a generic message for every status. Length 18 is the maximum because the in-memory key is a positive signed `long`.
+`validation-only` returns the validation or readiness message for HTTP 400, 415, and 503, and a generic message for HTTP 500. `always` adds the exception simple name on HTTP 500. `never` uses a generic message for every status. Length 18 is the maximum because each half of the in-memory key is a positive signed `long`. The cache key is the pair `(msisdn, nid)`.
 
 ### Blacklist
 
@@ -285,6 +292,7 @@ Startup validation rejects an empty API key when security is enabled, a blank Or
 | `blacklist.snapshot-directory` | Recovery copy | `.../snapshot` | directory | yes |
 | `blacklist.filename-pattern` | Version regex | `blacklist-(\d{8})\.csv` | regex with one group | yes |
 | `blacklist.msisdn-column` | Header of the number column | `MSISDN` | header text | yes |
+| `blacklist.nid-column` | Header of the national-id column | `NID` | header text | yes |
 | `blacklist.delimiter` | CSV delimiter | `,` | one character | yes |
 | `blacklist.encoding` | File charset | `UTF-8` | charset name | yes |
 | `blacklist.duplicate-policy` | Repeated MSISDN | `merge-or` | `merge-or`, `first-wins`, `last-wins`, `reject` | yes |
@@ -418,24 +426,24 @@ Actuator exposure is `health,info,metrics,prometheus`. Health details are `never
 CSV shape:
 
 ```csv
-MSISDN,Vishing,Suspicious_IMEI,Financial_Fraud
-201066257228,1,0,1
-201012345678,0,1,1
-201098765432,1,0,0
+MSISDN,NID,Vishing,Suspicious_IMEI,Financial_Fraud
+201066257228,29901011234567,1,0,1
+201012345678,28802021234568,0,1,1
+201098765432,27703031234569,1,0,0
 ```
 
-The loader reads the header from the first record. A byte-order mark is stripped. The number of source columns is whatever follows `MSISDN`, up to 64. Column order is the bit order. Bit 0 is the first source. Bit 63 is stored as `Long.MIN_VALUE` and compared with an unsigned test. A 65th source rejects the file.
+The loader reads the header from the first record. A byte-order mark is stripped. Column 1 is `MSISDN` and column 2 is `NID`. The number of source columns is whatever follows those two, up to 64. Column order is the bit order. Bit 0 is the first source. Bit 63 is stored as `Long.MIN_VALUE` and compared with an unsigned test. A 65th source rejects the file. The in-memory map stores the whole file under the composite key `(msisdn, nid)`.
 
 `display-names` maps a header to the reason text. An unknown header uses `unknown-display-pattern`, with underscores replaced by spaces, unless `require-known-headers` is true. In that case the file is rejected.
 
-Duplicate MSISDNs:
+Duplicate MSISDN and NID pairs:
 
 - `merge-or` combines flags with bitwise OR.
 - `first-wins` keeps the first row.
 - `last-wins` keeps the last row.
 - `reject` fails the file.
 
-Flags other than `0` or `1`, a bad MSISDN, a duplicate header, or a missing number column count as invalid rows. With `max-invalid-rows: 0` the file is rejected. Rejected files move to the rejected directory together with a `.reason.txt`. The active snapshot is left in place.
+Flags other than `0` or `1`, a bad MSISDN, a bad NID, a duplicate header, or a missing number column count as invalid rows. With `max-invalid-rows: 0` the file is rejected. Rejected files move to the rejected directory together with a `.reason.txt`. The active snapshot is left in place.
 
 Version is the first capture group of `filename-pattern`. The default is `blacklist-YYYYMMDD.csv`. A lower version never replaces a higher one. The same version with the same SHA-256 is moved to processed and not reloaded. The same version with a different checksum is a same-day correction and replaces the snapshot.
 
@@ -464,7 +472,7 @@ X-API-Key: <MSISDN_API_KEY>
 Request:
 
 ```json
-{"msisdn":"201066257228"}
+{"msisdn":"201066257228","nid":"29901011234567"}
 ```
 
 Blacklisted:
@@ -473,8 +481,9 @@ Blacklisted:
 {
   "requestId": "req-001",
   "msisdn": "201066257228",
+  "nid": "29901011234567",
   "result": "KO",
-  "reasons": ["Anti-Fraud (Vishing)", "Anti-Fraud (Financial Fraud)"],
+  "reason": "Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)",
   "blacklistVersion": "20261015"
 }
 ```
@@ -485,8 +494,9 @@ Eligible:
 {
   "requestId": "req-002",
   "msisdn": "201055555555",
+  "nid": "29901011234560",
   "result": "OK",
-  "reasons": [],
+  "reason": "",
   "blacklistVersion": "20261015"
 }
 ```
@@ -497,20 +507,20 @@ The real `requestId` is `req-` plus a UUID. Unknown JSON properties are rejected
 curl -sS -D - http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' \
   -H "X-API-Key: ${MSISDN_API_KEY}" \
-  -d '{"msisdn":"201066257228"}'
+  -d '{"msisdn":"201066257228","nid":"29901011234567"}'
 ```
 
 Errors:
 
 | HTTP | When |
 |---|---|
-| 400 | Missing body, unknown property, MSISDN fails the pattern, wrong type. |
+| 400 | Missing body, unknown property, MSISDN or NID fails the pattern, wrong type. |
 | 401 | Security is enabled and the key is missing or wrong. Not audited. |
 | 415 | Unsupported media type. |
 | 503 | No fresh snapshot, queue full after the overflow timeout, disk below the floor, audit writer dead. |
 | 500 | Unexpected exception. The body does not include the stack. |
 
-`samples/api_requests.http` contains the same calls for an HTTP client. Authentication is the shared API key. There is no end-user login. Restrict the key to the calling system and rotate it by changing `MSISDN_API_KEY` and restarting.
+`samples/api_requests.http` contains the same calls for an HTTP client. The caller-facing contract, including every status code and the security recommendation, is `docs/api-consumer-guide.md`. Authentication in this release is the shared API key header `X-API-Key`. Mutual TLS is the recommended production caller identity and is not enabled here. Restrict the key to the calling system and rotate it by changing `MSISDN_API_KEY` and restarting.
 
 Operational status:
 
@@ -528,7 +538,7 @@ The body contains version, uptime, blacklist version and counts, queue size and 
 The HTTP thread offers an `AuditEvent` to a bounded queue and returns. One worker, by default, appends a JSON object and a newline.
 
 ```json
-{"requestId":"req-001","requestTimestamp":"2026-10-15T00:00:00Z","responseTimestamp":"2026-10-15T00:00:00.001Z","msisdn":"201066257228","result":"KO","reasonMask":"5","reasons":["Anti-Fraud (Vishing)","Anti-Fraud (Financial Fraud)"],"blacklistVersion":"20261015","processingTimeMs":1,"httpStatus":200,"apiInstance":"msisdn-api"}
+{"requestId":"req-001","requestTimestamp":"2026-10-15T00:00:00Z","responseTimestamp":"2026-10-15T00:00:00.001Z","msisdn":"201066257228","nid":"29901011234567","result":"KO","reasonMask":"5","reason":"Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)","blacklistVersion":"20261015","processingTimeMs":1,"httpStatus":200,"apiInstance":"msisdn-api"}
 ```
 
 `reasonMask` is the unsigned decimal form of the bitmask. Mask `5` is bits 0 and 2.
@@ -562,7 +572,7 @@ Application logs go to `logs/application` through Log4j2. An async appender with
 
 The pool is HikariCP, created only when `oracle-audit.enabled` is true. Each new connection runs `ALTER SESSION SET TIME_ZONE = 'UTC'`. Inserts use `JdbcTemplate` batching. JPA is not on the classpath.
 
-Table `FMSPRD6.MSISDN_ELIGIBILITY_AUDIT` columns: `REQUEST_ID`, `REQUEST_TIMESTAMP`, `RESPONSE_TIMESTAMP`, `MSISDN`, `RESULT`, `REASON_MASK`, `REASONS`, `BLACKLIST_VERSION`, `PROCESSING_TIME_MS`, `HTTP_STATUS`, `API_INSTANCE`, plus `INGESTED_AT`. `MSISDN` is `VARCHAR2`. `REASON_MASK` is `VARCHAR2(16)` holding 16 uppercase hex characters so bit 63 is not a negative `NUMBER`. `REQUEST_ID` is the primary key. No sequence is used.
+Table `FMSPRD6.MSISDN_ELIGIBILITY_AUDIT` columns: `REQUEST_ID`, `REQUEST_TIMESTAMP`, `RESPONSE_TIMESTAMP`, `MSISDN`, `NID`, `RESULT`, `REASON_MASK`, `REASONS`, `BLACKLIST_VERSION`, `PROCESSING_TIME_MS`, `HTTP_STATUS`, `API_INSTANCE`, plus `INGESTED_AT`. `MSISDN` and `NID` are `VARCHAR2`. `REASONS` stores the KO text `Anti-fraud : ...`, or an empty value when the decision is not KO. `REASON_MASK` is `VARCHAR2(16)` holding 16 uppercase hex characters so bit 63 is not a negative `NUMBER`. `REQUEST_ID` is the primary key. No sequence is used. A table created before `NID` existed is updated with `sql/08_add_nid_column.sql`.
 
 Installation order, from `sql/README.md`:
 

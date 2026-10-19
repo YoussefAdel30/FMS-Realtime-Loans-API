@@ -22,6 +22,7 @@ public record BlacklistProperties(
         @NotBlank String snapshotDirectory,
         @NotBlank String filenamePattern,
         @NotBlank String msisdnColumn,
+        @NotBlank String nidColumn,
         @NotBlank String delimiter,
         @NotBlank String encoding,
         @NotNull DuplicatePolicy duplicatePolicy,

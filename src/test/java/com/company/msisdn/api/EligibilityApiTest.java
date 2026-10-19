@@ -67,10 +67,10 @@ class EligibilityApiTest {
         Path incoming = root.resolve("incoming");
         Files.createDirectories(incoming);
         Files.writeString(incoming.resolve("blacklist-20261015.csv"), """
-                MSISDN,Vishing,Suspicious_IMEI,Financial_Fraud
-                201066257228,1,0,1
-                201012345678,0,1,0
-                201098765432,0,0,0
+                MSISDN,NID,Vishing,Suspicious_IMEI,Financial_Fraud
+                201066257228,29901011234567,1,0,1
+                201012345678,28802021234568,0,1,0
+                201098765432,27703031234569,0,0,0
                 """);
         Files.writeString(incoming.resolve("blacklist-20261015.csv.ready"), "");
     }
@@ -88,26 +88,33 @@ class EligibilityApiTest {
         assertThat(ready.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(ready.getBody()).contains("UP");
 
-        ResponseEntity<String> eligible = post("201055555555");
+        ResponseEntity<String> eligible = post("201055555555", "29901011234560");
         assertThat(eligible.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(eligible.getBody()).contains("\"result\":\"OK\"");
-        assertThat(eligible.getBody()).contains("\"reasons\":[]");
+        assertThat(eligible.getBody()).contains("\"nid\":\"29901011234560\"");
+        assertThat(eligible.getBody()).contains("\"reason\":\"\"");
         assertThat(eligible.getBody()).contains("\"blacklistVersion\":\"20261015\"");
         assertThat(eligible.getHeaders().getFirst("X-Request-Id")).startsWith("req-");
 
-        ResponseEntity<String> oneReason = post("201012345678");
+        ResponseEntity<String> sameMsisdnOtherNid = post("201066257228", "25505051234561");
+        assertThat(sameMsisdnOtherNid.getBody()).contains("\"result\":\"OK\"");
+
+        ResponseEntity<String> oneReason = post("201012345678", "28802021234568");
         assertThat(oneReason.getBody()).contains("\"result\":\"KO\"");
-        assertThat(oneReason.getBody()).contains("Anti-Fraud (Suspicious IMEI)");
+        assertThat(oneReason.getBody()).contains("\"reason\":\"Anti-fraud : Anti-Fraud (Suspicious IMEI)\"");
 
-        ResponseEntity<String> many = post("201066257228");
-        assertThat(many.getBody()).contains("Anti-Fraud (Vishing)");
-        assertThat(many.getBody()).contains("Anti-Fraud (Financial Fraud)");
+        ResponseEntity<String> many = post("201066257228", "29901011234567");
+        assertThat(many.getBody()).contains("\"reason\":\"Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)\"");
 
-        ResponseEntity<String> zeros = post("201098765432");
+        ResponseEntity<String> zeros = post("201098765432", "27703031234569");
         assertThat(zeros.getBody()).contains("\"result\":\"OK\"");
+        assertThat(zeros.getBody()).contains("\"reason\":\"\"");
 
-        ResponseEntity<String> invalid = post("abc");
+        ResponseEntity<String> invalid = post("abc", "29901011234567");
         assertThat(invalid.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+        ResponseEntity<String> invalidNid = post("201055555555", "123");
+        assertThat(invalidNid.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
         ResponseEntity<String> status = rest.getForEntity("/api/v1/system/status", String.class);
         assertThat(status.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -119,8 +126,11 @@ class EligibilityApiTest {
         waitUntil(() -> auditContains(requestId), Duration.ofSeconds(8));
     }
 
-    private ResponseEntity<String> post(String msisdn) {
-        return rest.postForEntity("/api/v1/eligibility/check", java.util.Map.of("msisdn", msisdn), String.class);
+    private ResponseEntity<String> post(String msisdn, String nid) {
+        return rest.postForEntity(
+                "/api/v1/eligibility/check",
+                java.util.Map.of("msisdn", msisdn, "nid", nid),
+                String.class);
     }
 
     private static boolean auditContains(String requestId) throws Exception {

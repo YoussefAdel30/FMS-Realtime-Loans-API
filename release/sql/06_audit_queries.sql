@@ -12,6 +12,7 @@ PROMPT Latest 50 API requests
 SELECT request_id,
        request_timestamp,
        msisdn,
+       nid,
        result,
        reason_mask,
        reasons,
@@ -25,7 +26,7 @@ SELECT request_id,
  FETCH FIRST 50 ROWS ONLY;
 
 PROMPT Requests for one MSISDN
-SELECT request_timestamp, request_id, result, reasons, blacklist_version, http_status, api_instance
+SELECT request_timestamp, request_id, msisdn, nid, result, reasons, blacklist_version, http_status, api_instance
   FROM &schema_owner..MSISDN_ELIGIBILITY_AUDIT
  WHERE msisdn = '&msisdn'
  ORDER BY request_timestamp DESC

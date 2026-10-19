@@ -29,8 +29,8 @@ public class GlobalExceptionHandler {
         this.clock = clock;
     }
 
-    @ExceptionHandler(InvalidMsisdnException.class)
-    public ResponseEntity<ErrorResponse> invalidMsisdn(InvalidMsisdnException ex, HttpServletRequest request) {
+    @ExceptionHandler({InvalidMsisdnException.class, InvalidNationalIdException.class})
+    public ResponseEntity<ErrorResponse> invalidIdentifier(RuntimeException ex, HttpServletRequest request) {
         return error(HttpStatus.BAD_REQUEST, ex.getMessage(), request, false);
     }
 

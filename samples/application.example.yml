@@ -64,11 +64,17 @@ api:
     min-length: 12
     max-length: 12
     description: "12-digit Egyptian MSISDN starting with 20"
+  nid:
+    pattern: "^[0-9]{14}$"
+    min-length: 14
+    max-length: 14
+    description: "14-digit national id"
   response:
     eligible-value: OK
     ineligible-value: KO
     include-request-id: true
     include-msisdn: true
+    include-nid: true
     include-reasons: true
     include-blacklist-version: true
   error:
@@ -82,6 +88,7 @@ blacklist:
   snapshot-directory: /opt/msisdn-api/data/blacklist/snapshot
   filename-pattern: "blacklist-(\\d{8})\\.csv"
   msisdn-column: MSISDN
+  nid-column: NID
   delimiter: ","
   encoding: UTF-8
   duplicate-policy: merge-or

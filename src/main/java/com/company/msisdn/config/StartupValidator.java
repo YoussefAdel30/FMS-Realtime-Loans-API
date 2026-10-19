@@ -52,6 +52,13 @@ public class StartupValidator {
         if (api.msisdn().minLength() > api.msisdn().maxLength()) {
             errors.add("api.msisdn.min-length must be <= api.msisdn.max-length");
         }
+        compile(api.nid().pattern(), "api.nid.pattern", errors);
+        if (api.nid().minLength() > api.nid().maxLength()) {
+            errors.add("api.nid.min-length must be <= api.nid.max-length");
+        }
+        if (api.nid().maxLength() > 18 || api.msisdn().maxLength() > 18) {
+            errors.add("api.msisdn.max-length and api.nid.max-length must be at most 18 digits");
+        }
         if (api.response().eligibleValue().equals(api.response().ineligibleValue())) {
             errors.add("api.response.eligible-value and ineligible-value must differ");
         }

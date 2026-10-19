@@ -75,6 +75,7 @@ BEGIN
     require(column_exists('REQUEST_TIMESTAMP'), 'Missing column REQUEST_TIMESTAMP');
     require(column_exists('RESPONSE_TIMESTAMP'), 'Missing column RESPONSE_TIMESTAMP');
     require(column_exists('MSISDN'), 'Missing column MSISDN');
+    require(column_exists('NID'), 'Missing column NID');
     require(column_exists('RESULT'), 'Missing column RESULT');
     require(column_exists('REASON_MASK'), 'Missing column REASON_MASK');
     require(column_exists('REASONS'), 'Missing column REASONS');
@@ -85,6 +86,7 @@ BEGIN
     require(column_exists('INGESTED_AT'), 'Missing column INGESTED_AT');
     require(index_exists('PK_MSISDN_ELIG_AUDIT'), 'Missing primary key index PK_MSISDN_ELIG_AUDIT');
     require(index_exists('IDX_MSISDN_ELIG_MSISDN_TS'), 'Missing index IDX_MSISDN_ELIG_MSISDN_TS');
+    require(index_exists('IDX_MSISDN_ELIG_PAIR_TS'), 'Missing index IDX_MSISDN_ELIG_PAIR_TS');
     require(index_exists('IDX_MSISDN_ELIG_REQ_TS'), 'Missing index IDX_MSISDN_ELIG_REQ_TS');
     require(constraint_exists('PK_MSISDN_ELIG_AUDIT'), 'Missing primary key constraint');
     require(constraint_exists('CK_MSISDN_ELIG_MASK'), 'Missing reason mask check');
@@ -99,10 +101,10 @@ END;
 PROMPT Connectivity probe. Run this while connected as the runtime user:
 PROMPT   SELECT 1 FROM DUAL;
 PROMPT   INSERT INTO &schema_owner..MSISDN_ELIGIBILITY_AUDIT (
-PROMPT       REQUEST_ID, REQUEST_TIMESTAMP, RESPONSE_TIMESTAMP, MSISDN, RESULT,
+PROMPT       REQUEST_ID, REQUEST_TIMESTAMP, RESPONSE_TIMESTAMP, MSISDN, NID, RESULT,
 PROMPT       REASON_MASK, REASONS, BLACKLIST_VERSION, PROCESSING_TIME_MS, HTTP_STATUS, API_INSTANCE)
 PROMPT   SELECT 'verify-' || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISSFF3'),
-PROMPT          SYSTIMESTAMP, SYSTIMESTAMP, '201000000000', 'OK',
+PROMPT          SYSTIMESTAMP, SYSTIMESTAMP, '201000000000', '29901011234567', 'OK',
 PROMPT          '0000000000000000', NULL, 'verify', 0, 200, 'verify'
 PROMPT     FROM DUAL
 PROMPT    WHERE NOT EXISTS (

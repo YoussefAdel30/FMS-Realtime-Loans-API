@@ -25,7 +25,8 @@ public final class ConfigFixtures {
                 "/api/v1/system/status",
                 "test-instance",
                 new ApiProperties.Msisdn("^20[0-9]{10}$", 12, 12, "egyptian"),
-                new ApiProperties.Response("OK", "KO", true, true, true, true),
+                new ApiProperties.Nid("^[0-9]{14}$", 14, 14, "14-digit national id"),
+                new ApiProperties.Response("OK", "KO", true, true, true, true, true),
                 new ApiProperties.Error(ErrorMessageMode.VALIDATION_ONLY, true));
     }
 
@@ -37,6 +38,7 @@ public final class ConfigFixtures {
                 root.resolve("snapshot").toString(),
                 "blacklist-(\\d{8})\\.csv",
                 "MSISDN",
+                "NID",
                 ",",
                 "UTF-8",
                 policy,

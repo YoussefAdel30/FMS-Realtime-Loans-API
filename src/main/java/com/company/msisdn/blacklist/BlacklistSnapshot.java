@@ -1,12 +1,11 @@
 package com.company.msisdn.blacklist;
 
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import java.time.Instant;
 import java.util.List;
 
 public final class BlacklistSnapshot {
 
-    private final Long2LongOpenHashMap entries;
+    private final CompositeBlacklistMap entries;
     private final List<SourceDefinition> sources;
     private final String version;
     private final long versionNumber;
@@ -19,7 +18,7 @@ public final class BlacklistSnapshot {
     private final long byteSize;
 
     public BlacklistSnapshot(
-            Long2LongOpenHashMap entries,
+            CompositeBlacklistMap entries,
             List<SourceDefinition> sources,
             String version,
             long versionNumber,
@@ -43,12 +42,12 @@ public final class BlacklistSnapshot {
         this.byteSize = byteSize;
     }
 
-    public long lookup(long msisdn) {
-        return entries.get(msisdn);
+    public long lookup(long msisdn, long nid) {
+        return entries.get(msisdn, nid);
     }
 
-    public boolean contains(long msisdn) {
-        return entries.containsKey(msisdn);
+    public boolean contains(long msisdn, long nid) {
+        return entries.contains(msisdn, nid);
     }
 
     public List<SourceDefinition> sources() {

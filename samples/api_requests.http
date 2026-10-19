@@ -1,28 +1,41 @@
-### Eligible MSISDN
+### Eligible pair (MSISDN + NID not in the blacklist)
 POST http://127.0.0.1:8080/api/v1/eligibility/check
 Content-Type: application/json
 X-API-Key: {{apiKey}}
 
 {
-  "msisdn": "201055555555"
+  "msisdn": "201055555555",
+  "nid": "29901011234560"
 }
 
-### Blacklisted MSISDN with multiple reasons
+### Blacklisted pair with multiple flags
 POST http://127.0.0.1:8080/api/v1/eligibility/check
 Content-Type: application/json
 X-API-Key: {{apiKey}}
 
 {
-  "msisdn": "201066257228"
+  "msisdn": "201066257228",
+  "nid": "29901011234567"
 }
 
-### Invalid MSISDN
+### Same MSISDN, different NID (eligible when only the pair above is listed)
 POST http://127.0.0.1:8080/api/v1/eligibility/check
 Content-Type: application/json
 X-API-Key: {{apiKey}}
 
 {
-  "msisdn": "123"
+  "msisdn": "201066257228",
+  "nid": "25505051234561"
+}
+
+### Invalid NID
+POST http://127.0.0.1:8080/api/v1/eligibility/check
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "msisdn": "201055555555",
+  "nid": "123"
 }
 
 ### Operational status

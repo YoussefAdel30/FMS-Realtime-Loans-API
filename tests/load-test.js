@@ -6,7 +6,9 @@ const apiKey = __ENV.API_KEY || '';
 const rate = Number(__ENV.RATE || 100);
 const duration = __ENV.DURATION || '1m';
 const eligible = __ENV.ELIGIBLE_MSISDN || '201055555555';
+const eligibleNid = __ENV.ELIGIBLE_NID || '29901011234560';
 const blocked = __ENV.BLOCKED_MSISDN || '201066257228';
+const blockedNid = __ENV.BLOCKED_NID || '29901011234567';
 
 export const options = {
   scenarios: {
@@ -26,14 +28,16 @@ export const options = {
 };
 
 export default function () {
-  const msisdn = Math.random() < 0.8 ? eligible : blocked;
+  const blockedCall = Math.random() >= 0.8;
+  const msisdn = blockedCall ? blocked : eligible;
+  const nid = blockedCall ? blockedNid : eligibleNid;
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) {
     headers['X-API-Key'] = apiKey;
   }
   const response = http.post(
     `${baseUrl}/api/v1/eligibility/check`,
-    JSON.stringify({ msisdn: msisdn }),
+    JSON.stringify({ msisdn: msisdn, nid: nid }),
     { headers: headers, timeout: '5s' }
   );
   check(response, {

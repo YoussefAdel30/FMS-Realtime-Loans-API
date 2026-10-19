@@ -15,6 +15,7 @@ public record ApiProperties(
         @NotBlank String statusPath,
         @NotBlank String instanceId,
         @Valid @NotNull Msisdn msisdn,
+        @Valid @NotNull Nid nid,
         @Valid @NotNull Response response,
         @Valid @NotNull Error error
 ) {
@@ -27,11 +28,20 @@ public record ApiProperties(
     ) {
     }
 
+    public record Nid(
+            @NotBlank String pattern,
+            @Min(1) @Max(18) int minLength,
+            @Min(1) @Max(18) int maxLength,
+            @NotBlank String description
+    ) {
+    }
+
     public record Response(
             @NotBlank String eligibleValue,
             @NotBlank String ineligibleValue,
             boolean includeRequestId,
             boolean includeMsisdn,
+            boolean includeNid,
             boolean includeReasons,
             boolean includeBlacklistVersion
     ) {

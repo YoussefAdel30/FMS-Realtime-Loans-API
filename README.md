@@ -1,8 +1,8 @@
 # MSISDN Eligibility Validation API
 
-Real-time eligibility checks against an in-memory blacklist of up to 10 million MSISDNs. The request path does not query Oracle. Audit records are queued, written to local segments, then inserted into `FMSPRD6.MSISDN_ELIGIBILITY_AUDIT` and exported to CSV.
+Real-time eligibility checks against an in-memory blacklist of up to 10 million MSISDN and national-id pairs. The request path does not query Oracle. Audit records are queued, written to local segments, then inserted into `FMSPRD6.MSISDN_ELIGIBILITY_AUDIT` and exported to CSV.
 
-The operations guide is [docs.md](docs.md). Oracle installation is [sql/README.md](sql/README.md). The manual test procedure is [tests/manual-testing.md](tests/manual-testing.md).
+The caller contract is [docs/api-consumer-guide.md](docs/api-consumer-guide.md). The operations guide is [docs.md](docs.md). Oracle installation is [sql/README.md](sql/README.md). The manual test procedure is [tests/manual-testing.md](tests/manual-testing.md).
 
 ## Build
 
@@ -29,7 +29,7 @@ With the default stability checks enabled, the file is loaded on the second scan
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/eligibility/check \
   -H 'Content-Type: application/json' \
-  -d '{"msisdn":"201066257228"}'
+  -d '{"msisdn":"201066257228","nid":"29901011234567"}'
 ```
 
 ## Production

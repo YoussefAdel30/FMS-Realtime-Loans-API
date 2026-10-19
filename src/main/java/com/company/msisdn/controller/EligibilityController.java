@@ -21,6 +21,6 @@ public class EligibilityController {
 
     @PostMapping("${api.eligibility-path}")
     public EligibilityResponse check(@Valid @RequestBody EligibilityRequest request, HttpServletRequest httpRequest) {
-        return eligibilityService.check(RequestIds.get(httpRequest), request.msisdn());
+        return eligibilityService.check(RequestIds.get(httpRequest), request.msisdn(), request.nid());
     }
 }

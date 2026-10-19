@@ -1,16 +1,16 @@
 package com.company.msisdn.audit;
 
 import java.time.Instant;
-import java.util.List;
 
 public record AuditEvent(
         String requestId,
         Instant requestTimestamp,
         Instant responseTimestamp,
         String msisdn,
+        String nid,
         String result,
         String reasonMask,
-        List<String> reasons,
+        String reason,
         String blacklistVersion,
         long processingTimeMs,
         int httpStatus,
