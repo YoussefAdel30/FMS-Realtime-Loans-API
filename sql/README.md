@@ -17,7 +17,7 @@ Timestamps written by the application are UTC. The JDBC pool runs `ALTER SESSION
 
 `06_audit_queries.sql` and `07_maintenance.sql` are operational examples. They are not part of installation.
 
-`08_add_nid_column.sql` is only for a table that was created before the NID column existed. A new installation uses `01` and `02`, which already include `NID`. On a host whose schema owner is `FMSUSER`, set `DEFINE schema_owner = FMSUSER` in that file before running it.
+`08_add_nid_column.sql` is only for a table that was created before the NID column existed. It adds `NID` when the column is missing, creates the pair index when that index is missing, and places `NID` immediately after `MSISDN` so `SELECT *` returns those two columns together. Run it again if an earlier copy of the script added `NID` at the end of the table. A new installation uses `01` and `02`, which already include `NID` in that position. On a host whose schema owner is `FMSUSER`, set `DEFINE schema_owner = FMSUSER` in that file before running it.
 
 Run the files with SQL*Plus or SQLcl so the `DEFINE` substitutions and `WHENEVER SQLERROR EXIT` behavior are honored:
 

@@ -24,7 +24,10 @@ class SqlScriptContentsTest {
         assertThat(tables).contains("VARCHAR2(16 CHAR)");
         assertThat(Files.readString(Path.of("sql/02_create_indexes.sql"))).contains("IDX_MSISDN_ELIG_MSISDN_TS");
         assertThat(Files.readString(Path.of("sql/02_create_indexes.sql"))).contains("IDX_MSISDN_ELIG_PAIR_TS");
-        assertThat(Files.readString(Path.of("sql/08_add_nid_column.sql"))).contains("NID VARCHAR2(32 CHAR)");
+        String nidMigration = Files.readString(Path.of("sql/08_add_nid_column.sql"));
+        assertThat(nidMigration).contains("NID VARCHAR2(32 CHAR)");
+        assertThat(nidMigration).contains("show('MSISDN');");
+        assertThat(nidMigration).contains("show('NID');");
         assertThat(Files.readString(Path.of("sql/03_create_sequences.sql"))).contains("No sequence is required");
         String grants = Files.readString(Path.of("sql/04_create_grants.sql"));
         assertThat(grants).contains("MSISDN_API");
