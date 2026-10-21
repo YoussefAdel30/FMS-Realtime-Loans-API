@@ -1,0 +1,42 @@
+2026-10-21T04:00:37.541+03:00 INFO  [main] c.c.m.Application  - Starting Application v1.0.0 using Java 17.0.17 with PID 2895778 (/app2/scripts/utilities/realtime_loans_api/msisdn-api.jar started by FMSUser in /app2/scripts/utilities/realtime_loans_api/scripts)
+2026-10-21T04:00:37.545+03:00 INFO  [main] c.c.m.Application  - No active profile set, falling back to 1 default profile: "default"
+2026-10-21T04:00:38.684+03:00 INFO  [main] o.s.b.w.e.t.TomcatWebServer  - Tomcat initialized with port 8080 (http)
+2026-10-21T04:00:38.700+03:00 INFO  [main] o.a.c.h.Http11NioProtocol  - Initializing ProtocolHandler ["http-nio-0.0.0.0-8080"]
+2026-10-21T04:00:38.703+03:00 INFO  [main] o.a.c.c.StandardService  - Starting service [Tomcat]
+2026-10-21T04:00:38.703+03:00 INFO  [main] o.a.c.c.StandardEngine  - Starting Servlet engine: [Apache Tomcat/10.1.42]
+2026-10-21T04:00:38.743+03:00 INFO  [main] o.a.c.c.C.[.[.[/]  - Initializing Spring embedded WebApplicationContext
+2026-10-21T04:00:38.745+03:00 INFO  [main] o.s.b.w.s.c.ServletWebServerApplicationContext  - Root WebApplicationContext: initialization completed in 1157 ms
+2026-10-21T04:00:39.224+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: blacklist.input-directory -> /app/scripts/utilities/realtime_loans_api/data/blacklist/incoming
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: blacklist.processed-directory -> /app/scripts/utilities/realtime_loans_api/data/blacklist/processed
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: blacklist.rejected-directory -> /app/scripts/utilities/realtime_loans_api/data/blacklist/rejected
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: blacklist.snapshot-directory -> /app/scripts/utilities/realtime_loans_api/data/blacklist/snapshot
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: audit.log.directory/active -> /app/scripts/utilities/realtime_loans_api/logs/audit/active
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: audit.log.directory/completed -> /app/scripts/utilities/realtime_loans_api/logs/audit/completed
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: audit.log.directory/archive -> /app/scripts/utilities/realtime_loans_api/logs/audit/archive
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: audit.log.directory/quarantine -> /app/scripts/utilities/realtime_loans_api/logs/audit/quarantine
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: oracle-audit.checkpoint-directory -> /app/scripts/utilities/realtime_loans_api/data/checkpoints/oracle
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: csv-export.destination-directory -> /app/scripts/utilities/realtime_loans_api/data/export
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: csv-export.checkpoint-directory -> /app/scripts/utilities/realtime_loans_api/data/checkpoints/csv
+2026-10-21T04:00:39.225+03:00 INFO  [main] c.c.m.c.DirectoryInitializer  - Directory ready: application-log-directory -> /app/scripts/utilities/realtime_loans_api/logs/application
+2026-10-21T04:00:39.243+03:00 INFO  [main] c.z.h.HikariDataSource  - msisdn-oracle - Starting...
+2026-10-21T04:00:39.321+03:00 INFO  [main] c.z.h.HikariDataSource  - msisdn-oracle - Start completed.
+2026-10-21T04:00:39.720+03:00 INFO  [main] o.s.b.a.e.w.EndpointLinksResolver  - Exposing 4 endpoints beneath base path '/actuator'
+2026-10-21T04:00:39.761+03:00 INFO  [main] c.c.m.c.ApplicationLifecycle  - Starting MSISDN eligibility API instance=DCHQFMSDET2 security=true oracleSchema=FMSUSER oracleUser=FMSUser jdbc=jdbc:oracle:thin:@//FMS-SCAN:1530/FMSPRD6
+2026-10-21T04:00:39.763+03:00 INFO  [main] c.c.m.a.AuditWorkers  - Started 1 audit segment writer(s)
+2026-10-21T04:00:39.764+03:00 INFO  [main] c.c.m.o.OracleIngestionService  - Oracle audit writer started batchSize=1000 flushIntervalMs=1000 schema=FMSUSER
+2026-10-21T04:00:39.764+03:00 INFO  [main] c.c.m.e.CsvExportService  - CSV audit export started, destination /app/scripts/utilities/realtime_loans_api/data/export
+2026-10-21T04:00:39.765+03:00 WARN  [main] c.c.m.b.BlacklistReloadService  - No validated blacklist snapshot is available in /app/scripts/utilities/realtime_loans_api/data/blacklist/snapshot
+2026-10-21T04:00:39.766+03:00 INFO  [main] c.c.m.c.ApplicationLifecycle  - MSISDN eligibility API lifecycle is up
+2026-10-21T04:00:39.767+03:00 INFO  [main] o.a.c.h.Http11NioProtocol  - Starting ProtocolHandler ["http-nio-0.0.0.0-8080"]
+2026-10-21T04:00:39.779+03:00 INFO  [main] o.s.b.w.e.t.TomcatWebServer  - Tomcat started on port 8080 (http) with context path '/'
+2026-10-21T04:00:39.793+03:00 INFO  [main] c.c.m.Application  - Started Application in 2.784 seconds (process running for 3.444)
+2026-10-21T04:00:40.453+03:00 INFO  [http-nio-0.0.0.0-8080-exec-1] o.a.c.c.C.[.[.[/]  - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-21T04:00:40.454+03:00 INFO  [http-nio-0.0.0.0-8080-exec-1] o.s.w.s.DispatcherServlet  - Initializing Servlet 'dispatcherServlet'
+2026-10-21T04:00:40.455+03:00 INFO  [http-nio-0.0.0.0-8080-exec-1] o.s.w.s.DispatcherServlet  - Completed initialization in 1 ms
+
+
+
+[FMSUser@DCHQFMSDET2 incoming]$ ls -l /app/scripts/utilities/realtime_loans_api/data/blacklist/incoming/
+total 4
+-rwxrwxr-x 1 FMSUser FMSUser 187 Oct 21 03:55 blacklist-20261021.csv
+

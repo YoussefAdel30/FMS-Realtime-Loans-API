@@ -1,0 +1,28 @@
+[Unit]
+Description=MSISDN Eligibility Validation API
+After=network-online.target
+Wants=network-online.target
+# This unit is for an administrator. FMSUser does not install it.
+# FMSUser runs scripts/start.sh and scripts/setup-cron.sh from the home directory.
+
+[Service]
+Type=simple
+User=msisdn
+Group=msisdn
+WorkingDirectory=/opt/msisdn-api
+EnvironmentFile=-/opt/msisdn-api/msisdn-api.env
+ExecStart=/opt/java/jdk-17/bin/java -Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -Djava.net.preferIPv4Stack=true -Dmsisdn.log.dir=/opt/msisdn-api/logs -Dlogging.config=file:/opt/msisdn-api/config/log4j2-spring.xml -jar /opt/msisdn-api/msisdn-api.jar --spring.config.additional-location=file:/opt/msisdn-api/application.yml
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=600
+TimeoutStopSec=60
+KillSignal=SIGTERM
+LimitNOFILE=131072
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
