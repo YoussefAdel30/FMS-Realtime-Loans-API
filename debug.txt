@@ -33,3 +33,10 @@
 2026-10-21T04:00:40.453+03:00 INFO  [http-nio-0.0.0.0-8080-exec-1] o.a.c.c.C.[.[.[/]  - Initializing Spring DispatcherServlet 'dispatcherServlet'
 2026-10-21T04:00:40.454+03:00 INFO  [http-nio-0.0.0.0-8080-exec-1] o.s.w.s.DispatcherServlet  - Initializing Servlet 'dispatcherServlet'
 2026-10-21T04:00:40.455+03:00 INFO  [http-nio-0.0.0.0-8080-exec-1] o.s.w.s.DispatcherServlet  - Completed initialization in 1 ms
+
+
+
+[FMSUser@DCHQFMSDET2 incoming]$ ls -l /app/scripts/utilities/realtime_loans_api/data/blacklist/incoming/
+total 4
+-rwxrwxr-x 1 FMSUser FMSUser 187 Oct 21 03:55 blacklist-20261021.csv
+
