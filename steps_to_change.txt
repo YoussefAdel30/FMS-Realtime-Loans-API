@@ -83,3 +83,113 @@ Then stop the process, copy in the new msisdn-api.jar, put a blacklist CSV whose
 
 
 8m ago
+
+
+
+
+cat > data/blacklist/incoming/blacklist-20261020.csv <<'EOF'
+MSISDN,NID,Vishing,Suspicious_IMEI,Financial_Fraud
+201066257228,29901011234567,1,0,1
+201012345678,28802021234568,0,1,1
+201098765432,27703031234569,1,0,0
+201055555551,26604041234560,0,0,0
+EOF
+touch data/blacklist/incoming/blacklist-20261020.csv.ready
+
+
+
+
+
+3. Start and wait until it is ready
+
+set -a
+source ./msisdn-api.env
+set +a
+./scripts/start.sh
+echo $?
+0 means the new file is loaded. The script polls for up to 180 seconds and returns as soon as readiness is up. 2 means the process is up but the blacklist was not accepted. In that case look at logs/application/console.log and data/blacklist/rejected/.
+
+Check readiness directly:
+
+
+curl -sS http://127.0.0.1:8080/actuator/health/readiness
+The body contains "status":"UP".
+
+4. Call the new request
+Load the key from the environment file in the same shell (source ./msisdn-api.env, as above). Then run these calls.
+
+Blacklisted pair. Expect HTTP 200, "result":"KO", and "reason":"Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)".
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201066257228","nid":"29901011234567"}'
+Same MSISDN, different NID. Expect "result":"OK" and "reason":"".
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201066257228","nid":"25505051234561"}'
+Pair that is not in the file. Expect OK.
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555555","nid":"29901011234560"}'
+Pair whose flags are all zero. Expect OK.
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555551","nid":"26604041234560"}'
+One flag. Expect "reason":"Anti-fraud : Anti-Fraud (Vishing)".
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201098765432","nid":"27703031234569"}'
+5. Check the failures
+MSISDN only. Expect HTTP 400.
+
+
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555555"}'
+Bad NID. Expect HTTP 400.
+
+
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555555","nid":"123"}'
+Wrong key. Expect HTTP 401.
+
+
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: wrong-key' \
+  -d '{"msisdn":"201055555555","nid":"29901011234560"}'
+6. Confirm the audit row
+
+sqlplus FMSUSER@//FMS-SCAN:1530/FMSPRD6
+
+SELECT column_id, column_name
+  FROM all_tab_columns
+ WHERE owner = 'FMSUSER'
+   AND table_name = 'MSISDN_ELIGIBILITY_AUDIT'
+ ORDER BY column_id;
+SELECT *
+  FROM FMSUSER.MSISDN_ELIGIBILITY_AUDIT
+ ORDER BY request_timestamp DESC
+ FETCH FIRST 5 ROWS ONLY;
+NID should be the column immediately after MSISDN. The KO row should have REASONS starting with Anti-fraud : . The audit writer runs a few seconds after the call, so wait briefly if the first query is empty.
+
+
+Just now
+
