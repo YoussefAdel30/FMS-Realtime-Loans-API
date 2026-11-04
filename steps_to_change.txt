@@ -1,0 +1,195 @@
+Replace the JAR, run only sql/08_add_nid_column.sql on the existing FMSUSER table, and add four blocks to the server application.yml. Do not run 01 through 07 again.
+
+SQL
+Connect as the owner:
+
+
+sqlplus FMSUSER@//FMS-SCAN:1530/FMSPRD6
+In 08_add_nid_column.sql, set this line before you run it:
+
+
+DEFINE schema_owner = FMSUSER
+That script adds NID to FMSUSER.MSISDN_ELIGIBILITY_AUDIT and creates the index IDX_MSISDN_ELIG_PAIR_TS. Run it once, before you start the new JAR.
+
+If the table is empty, you can then run:
+
+
+ALTER TABLE FMSUSER.MSISDN_ELIGIBILITY_AUDIT MODIFY (NID VARCHAR2(32 CHAR) NOT NULL);
+Leave schema: FMSUSER in the YAML. Do not change it back to FMSPRD6.
+
+YAML
+Edit /app/scripts/utilities/realtime_loans_api/application.yml. Leave the directories, disk-path, JDBC settings, and schema: FMSUSER as they are.
+
+1. Under api:, immediately after the msisdn: block, add:
+
+
+  nid:
+    pattern: "^[0-9]{14}$"
+    min-length: 14
+    max-length: 14
+    description: "14-digit national id"
+2. Inside api.response:, add these three lines. The block should look like this:
+
+
+  response:
+    eligible-value: OK
+    ineligible-value: KO
+    ko-reason-prefix: "Anti-fraud : "
+    ko-reason-separator: ", "
+    include-request-id: true
+    include-msisdn: true
+    include-nid: true
+    include-reasons: true
+    include-blacklist-version: true
+include-nid, ko-reason-prefix, and ko-reason-separator are the new lines.
+
+3. Inside api.error:, keep the two existing lines and add status-text and messages:
+
+
+  error:
+    include-message: validation-only
+    include-path: true
+    status-text:
+      bad-request: "Bad Request"
+      unauthorized: "Unauthorized"
+      unsupported-media-type: "Unsupported Media Type"
+      service-unavailable: "Service Unavailable"
+      internal-server-error: "Internal Server Error"
+    messages:
+      msisdn-required: "msisdn is required"
+      msisdn-length: "msisdn length must be between {min} and {max}"
+      msisdn-pattern: "msisdn does not match the configured pattern"
+      nid-required: "nid is required"
+      nid-length: "nid length must be between {min} and {max}"
+      nid-pattern: "nid does not match the configured pattern"
+      invalid-json: "request body is not valid JSON"
+      validation-failed: "request validation failed"
+      field-invalid: "{field} {detail}"
+      unauthorized: "A valid API key is required"
+      unsupported-media-type: "Content-Type must be application/json"
+      internal-error: "An unexpected error occurred"
+      internal-error-detail: "{exception}"
+      audit-writer-down: "Audit writer is not running"
+      disk-space: "Free disk space is below monitoring.disk-space-threshold-bytes"
+      audit-queue-readiness: "Audit queue utilization exceeded the readiness threshold"
+      audit-rejected: "Audit pipeline did not accept the event within {timeout}ms"
+      blacklist-not-loaded: "Blacklist is not loaded"
+      blacklist-stale: "Blacklist snapshot {version} exceeded max age {maxAge}"
+4. Under blacklist:, next to msisdn-column, add:
+
+
+  nid-column: NID
+Then stop the process, copy in the new msisdn-api.jar, put a blacklist CSV whose columns are MSISDN,NID,<flags> plus its .ready file into incoming, and start again.
+
+
+8m ago
+
+
+
+
+cat > data/blacklist/incoming/blacklist-20261020.csv <<'EOF'
+MSISDN,NID,Vishing,Suspicious_IMEI,Financial_Fraud
+201066257228,29901011234567,1,0,1
+201012345678,28802021234568,0,1,1
+201098765432,27703031234569,1,0,0
+201055555551,26604041234560,0,0,0
+EOF
+touch data/blacklist/incoming/blacklist-20261020.csv.ready
+
+
+
+
+
+3. Start and wait until it is ready
+
+set -a
+source ./msisdn-api.env
+set +a
+./scripts/start.sh
+echo $?
+0 means the new file is loaded. The script polls for up to 180 seconds and returns as soon as readiness is up. 2 means the process is up but the blacklist was not accepted. In that case look at logs/application/console.log and data/blacklist/rejected/.
+
+Check readiness directly:
+
+
+curl -sS http://127.0.0.1:8080/actuator/health/readiness
+The body contains "status":"UP".
+
+4. Call the new request
+Load the key from the environment file in the same shell (source ./msisdn-api.env, as above). Then run these calls.
+
+Blacklisted pair. Expect HTTP 200, "result":"KO", and "reason":"Anti-fraud : Anti-Fraud (Vishing), Anti-Fraud (Financial Fraud)".
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201066257228","nid":"29901011234567"}'
+Same MSISDN, different NID. Expect "result":"OK" and "reason":"".
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201066257228","nid":"25505051234561"}'
+Pair that is not in the file. Expect OK.
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555555","nid":"29901011234560"}'
+Pair whose flags are all zero. Expect OK.
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555551","nid":"26604041234560"}'
+One flag. Expect "reason":"Anti-fraud : Anti-Fraud (Vishing)".
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201098765432","nid":"27703031234569"}'
+5. Check the failures
+MSISDN only. Expect HTTP 400.
+
+
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555555"}'
+Bad NID. Expect HTTP 400.
+
+
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H "X-API-Key: ${MSISDN_API_KEY}" \
+  -d '{"msisdn":"201055555555","nid":"123"}'
+Wrong key. Expect HTTP 401.
+
+
+curl -sS -w '\n%{http_code}\n' http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: wrong-key' \
+  -d '{"msisdn":"201055555555","nid":"29901011234560"}'
+6. Confirm the audit row
+
+sqlplus FMSUSER@//FMS-SCAN:1530/FMSPRD6
+
+SELECT column_id, column_name
+  FROM all_tab_columns
+ WHERE owner = 'FMSUSER'
+   AND table_name = 'MSISDN_ELIGIBILITY_AUDIT'
+ ORDER BY column_id;
+SELECT *
+  FROM FMSUSER.MSISDN_ELIGIBILITY_AUDIT
+ ORDER BY request_timestamp DESC
+ FETCH FIRST 5 ROWS ONLY;
+NID should be the column immediately after MSISDN. The KO row should have REASONS starting with Anti-fraud : . The audit writer runs a few seconds after the call, so wait briefly if the first query is empty.
+
+
+Just now
+
