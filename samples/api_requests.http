@@ -1,0 +1,36 @@
+### Eligible MSISDN
+POST http://127.0.0.1:8080/api/v1/eligibility/check
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "msisdn": "201055555555"
+}
+
+### Blacklisted MSISDN with multiple reasons
+POST http://127.0.0.1:8080/api/v1/eligibility/check
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "msisdn": "201066257228"
+}
+
+### Invalid MSISDN
+POST http://127.0.0.1:8080/api/v1/eligibility/check
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "msisdn": "123"
+}
+
+### Operational status
+GET http://127.0.0.1:8080/api/v1/system/status
+X-API-Key: {{apiKey}}
+
+### Liveness
+GET http://127.0.0.1:8080/actuator/health/liveness
+
+### Readiness
+GET http://127.0.0.1:8080/actuator/health/readiness

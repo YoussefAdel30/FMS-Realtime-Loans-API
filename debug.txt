@@ -1,0 +1,31 @@
+cd /app/scripts/utilities/realtime_loans_api/sql
+sed -i 's/FMSPRD6/FMSUSER/g' *.sql
+grep schema_owner *.sql
+
+
+sed -i 's/schema: FMSPRD6/schema: FMSUSER/' /app/scripts/utilities/realtime_loans_api/application.yml
+
+ORACLE_JDBC_URL=jdbc:oracle:thin:@//FMS-SCAN:1530/FMSPRD6
+ORACLE_USERNAME=FMSUSER
+ORACLE_PASSWORD=the-FMSUSER-database-password
+
+
+cd /app/scripts/utilities/realtime_loans_api/sql
+sqlplus FMSUSER@//FMS-SCAN:1530/FMSPRD6
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: fms-test-key-20261018-elg-api' \
+  -d '{"msisdn":"201066257228"}'
+
+
+curl -sS http://127.0.0.1:8080/api/v1/eligibility/check \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: fms-test-key-20261018-elg-api' \
+  -d '{"msisdn":"201055555555"}'
+
+
+curl -sS http://127.0.0.1:8080/actuator/health/liveness
+curl -sS http://127.0.0.1:8080/actuator/health/readiness
+tail -n 40 /app/scripts/utilities/realtime_loans_api/logs/application/console.log
